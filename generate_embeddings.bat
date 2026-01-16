@@ -1,0 +1,3 @@
+python get_embeddings.py --labels-csv-name coronado_hills_sampled.csv --model-name model_weights_camera_10-27-25.pth --load-model --keep-imgs --embeddings-name coronado_embeddings
+python get_embeddings.py --labels-csv-name mesa_grande_n_data.csv --model-name model_weights_camera_10-27-25.pth --load-model --keep-imgs --embeddings-name mesa_grande_embeddings
+python get_embeddings.py --labels-csv-name palomar_observatory_1_data.csv --model-name model_weights_camera_10-27-25.pth --load-model --keep-imgs --embeddings-name palomar_embeddings

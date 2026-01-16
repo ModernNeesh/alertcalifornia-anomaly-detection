@@ -101,21 +101,22 @@ print(f"Model training complete; model is located at {args.model_path + args.mod
 print("Saving embeddings...")
 
 
+embeddings_name = args.embeddings_name
 
 client = PersistentClient(path=args.collection_dir) 
 
 try:
-    client.delete_collection(name="train_embeddings")
+    client.delete_collection(name=embeddings_name + "_train")
 except Exception:
     pass
 
 try:
-    client.delete_collection(name="val_embeddings")
+    client.delete_collection(name=embeddings_name + "_val")
 except Exception:
     pass
 
 try:
-    client.delete_collection(name="test_embeddings")
+    client.delete_collection(name=embeddings_name + "_test")
 except Exception:
     pass
 
