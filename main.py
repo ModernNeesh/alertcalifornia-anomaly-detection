@@ -16,7 +16,7 @@ import helper_code.data_vis as data_vis
 import helper_code.model_functions as model_functions
 
 
-torch.manual_seed(2346)
+torch.manual_seed(1234)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="A simple calculator script.")
