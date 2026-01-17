@@ -235,6 +235,7 @@ embedding_data/*
 filtered_data/
 camera_data/images/*
 camera_data/dataframes/*
+camera_data/*.csv
 images_for_report/
 import_data_ptz/
 scene_data/
