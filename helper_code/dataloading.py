@@ -26,7 +26,7 @@ def get_data_urls(labels_csv):
     data = pd.read_csv(labels_csv)
     data = data.get(["choice", "image", "annotation_id", ]).fillna(0)
 
-    data["choice"] = (data["choice"] != 0).astype(int)
+    data["choice"] = data["choice"].str.extract(r"\d").astype(int)
 
     return data
 

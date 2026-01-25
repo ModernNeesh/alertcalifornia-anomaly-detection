@@ -68,9 +68,9 @@ train, val, test = dataloading.get_train_val_test(data = data, output_csvs=True)
 
 train_dataset, val_dataset, test_dataset = dataloading.get_datasets(train, val, test)
 
-train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True, pin_memory=True)
-val_dataloader = DataLoader(val_dataset, batch_size=64, shuffle=True, pin_memory=True)
-test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True, pin_memory=True)
+train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True, pin_memory=True)
+val_dataloader = DataLoader(val_dataset, batch_size=32, shuffle=True, pin_memory=True)
+test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=True, pin_memory=True)
 
 
 print(f"Data loading complete.")
