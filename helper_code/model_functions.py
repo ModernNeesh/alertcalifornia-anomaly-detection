@@ -105,7 +105,7 @@ class ViTEmbeddingNet(nn.Module):
     
 #Classification head for model
 class ClassificationHead(nn.Module):
-    def __init__(self, input_dim = 768, num_classes = 2, hidden_dim=128):
+    def __init__(self, input_dim = 768, num_classes = 5, hidden_dim=128):
         super().__init__()
         self.norm = nn.LayerNorm(input_dim)
         self.head = nn.Sequential(

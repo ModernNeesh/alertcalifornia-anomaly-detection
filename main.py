@@ -68,9 +68,9 @@ train, val, test = dataloading.get_train_val_test(data = data, output_csvs=True)
 
 train_dataset, val_dataset, test_dataset = dataloading.get_datasets(train, val, test)
 
-train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True, pin_memory=True)
-val_dataloader = DataLoader(val_dataset, batch_size=64, shuffle=True, pin_memory=True)
-test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True, pin_memory=True)
+train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True, pin_memory=True)
+val_dataloader = DataLoader(val_dataset, batch_size=32, shuffle=True, pin_memory=True)
+test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=True, pin_memory=True)
 
 
 print(f"Data loading complete.")
@@ -134,17 +134,17 @@ dataloading.save_full_embeddings(encoder, test_dataloader,
 #Embeddings of training data, used to train the classification head
 train_embeddings, train_labels, _, _ = dataloading.load_full_embeddings(train, "train_embeddings", persist_directory = args.collection_dir)
 train_embedding_dataset = dataloading.CustomEmbeddingDataset(train_embeddings, train_labels)
-train_embedding_dataloader = DataLoader(train_embedding_dataset, batch_size=64, shuffle=True, pin_memory=True)
+train_embedding_dataloader = DataLoader(train_embedding_dataset, batch_size=32, shuffle=True, pin_memory=True)
 
 #Embeddings of validation data, used to display results
 val_embeddings, val_labels, _, _ = dataloading.load_full_embeddings(val, "val_embeddings", persist_directory = args.collection_dir)
 val_embedding_dataset = dataloading.CustomEmbeddingDataset(val_embeddings, val_labels)
-val_embedding_dataloader = DataLoader(val_embedding_dataset, batch_size=64, shuffle=True, pin_memory=True)
+val_embedding_dataloader = DataLoader(val_embedding_dataset, batch_size=32, shuffle=True, pin_memory=True)
 
 #Embeddings of test data, used to evaluate classification head
 test_embeddings, test_labels, _, _ = dataloading.load_full_embeddings(test, "test_embeddings", persist_directory = args.collection_dir)
 test_embedding_dataset = dataloading.CustomEmbeddingDataset(test_embeddings, test_labels)
-test_embedding_dataloader = DataLoader(test_embedding_dataset, batch_size=64, shuffle=True, pin_memory=True)
+test_embedding_dataloader = DataLoader(test_embedding_dataset, batch_size=32, shuffle=True, pin_memory=True)
 
 print(f"Embedding loading complete. Training and test data embeddings are saved at {args.collection_dir} under the \
     names 'train_embeddings' and 'test_embeddings' respectively.")
