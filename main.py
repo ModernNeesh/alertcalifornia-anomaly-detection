@@ -180,8 +180,12 @@ else:
 
             labeled_idx = torch.argwhere((labels != -5).int())
 
-            #embeddings = embeddings[labeled_idx]
-            #labels = labels[labeled_idx]
+            embeddings = torch.squeeze(embeddings[labeled_idx])
+            labels = torch.squeeze(labels[labeled_idx])
+
+            if len(labels == 0):
+                continue
+            labels = torch.vstack([(labels == 0).float(), (labels == 1).float()]).reshape((len(labels),2))
 
             print(embeddings.shape)
             print(labels.shape)
