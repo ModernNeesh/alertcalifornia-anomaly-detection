@@ -51,9 +51,7 @@ def download_images(data, image_dir, replace_images):
     )
     session.mount("https://", HTTPAdapter(max_retries=retries))
 
-    # Rate limits
-    BATCH_SIZE = 20     # number of images before resting
-    SLEEP_TIME = 1.5    # seconds to sleep after each batch
+
 
     for i in tqdm(range(len(data))):
         url = data.iloc[i]['image']
@@ -76,9 +74,6 @@ def download_images(data, image_dir, replace_images):
             print(f"Error for ID {ann_id}: {e}")
             continue
 
-        # Gentle rate limiting
-        if i % BATCH_SIZE == 0 and i != 0:
-            time.sleep(SLEEP_TIME)
 
 
 

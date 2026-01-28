@@ -46,7 +46,7 @@ if __name__ == "__main__":
                         help = "The directory to save embeddings to")
     
 
-    parser.set_defaults(image_download=True, model_train=True, embedding_save = True)
+    parser.set_defaults(image_download=False, model_train=True, embedding_save = True)
     
     args = parser.parse_args()
 
@@ -64,13 +64,19 @@ labels_csv = args.camera_data_dir + args.labels_csv_name
 
 data = dataloading.get_data(labels_csv, args.image_dir, replace_images = args.image_download)
 
+new_label_column = data['choice'].sample(3000)
+
+data['choice'] = new_label_column
+
+data['choice'] = data['choice'].fillna(-5)
+
 train, val, test = dataloading.get_train_val_test(data = data, output_csvs=True)
 
 train_dataset, val_dataset, test_dataset = dataloading.get_datasets(train, val, test)
 
-train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True, pin_memory=True)
-val_dataloader = DataLoader(val_dataset, batch_size=64, shuffle=True, pin_memory=True)
-test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True, pin_memory=True)
+train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True, pin_memory=True)
+val_dataloader = DataLoader(val_dataset, batch_size=32, shuffle=True, pin_memory=True)
+test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=True, pin_memory=True)
 
 
 print(f"Data loading complete.")
@@ -83,8 +89,8 @@ encoder.to(device)
 
 if args.model_train:
     num_epochs = 1
-    loss_func = model_functions.triplet_loss(margin=0.19)
-    optimizer = optim.Adam(encoder.parameters(), lr=2e-5) 
+    loss_func = model_functions.deepsad_loss(encoder, train_dataloader, device, eta = 1)
+    optimizer = optim.Adam(encoder.parameters(), lr=2e-5, weight_decay=1e-6) 
 
     model_functions.train_model(encoder, train_data=train_dataloader, 
                                 num_epochs=num_epochs, loss_func=loss_func, 
@@ -134,17 +140,17 @@ dataloading.save_full_embeddings(encoder, test_dataloader,
 #Embeddings of training data, used to train the classification head
 train_embeddings, train_labels, _, _ = dataloading.load_full_embeddings(train, "train_embeddings", persist_directory = args.collection_dir)
 train_embedding_dataset = dataloading.CustomEmbeddingDataset(train_embeddings, train_labels)
-train_embedding_dataloader = DataLoader(train_embedding_dataset, batch_size=64, shuffle=True, pin_memory=True)
+train_embedding_dataloader = DataLoader(train_embedding_dataset, batch_size=32, shuffle=True, pin_memory=True)
 
 #Embeddings of validation data, used to display results
 val_embeddings, val_labels, _, _ = dataloading.load_full_embeddings(val, "val_embeddings", persist_directory = args.collection_dir)
 val_embedding_dataset = dataloading.CustomEmbeddingDataset(val_embeddings, val_labels)
-val_embedding_dataloader = DataLoader(val_embedding_dataset, batch_size=64, shuffle=True, pin_memory=True)
+val_embedding_dataloader = DataLoader(val_embedding_dataset, batch_size=32, shuffle=True, pin_memory=True)
 
 #Embeddings of test data, used to evaluate classification head
 test_embeddings, test_labels, _, _ = dataloading.load_full_embeddings(test, "test_embeddings", persist_directory = args.collection_dir)
 test_embedding_dataset = dataloading.CustomEmbeddingDataset(test_embeddings, test_labels)
-test_embedding_dataloader = DataLoader(test_embedding_dataset, batch_size=64, shuffle=True, pin_memory=True)
+test_embedding_dataloader = DataLoader(test_embedding_dataset, batch_size=32, shuffle=True, pin_memory=True)
 
 print(f"Embedding loading complete. Training and test data embeddings are saved at {args.collection_dir} under the \
     names 'train_embeddings' and 'test_embeddings' respectively.")
@@ -171,6 +177,14 @@ else:
         for batch in tqdm(train_embedding_dataloader, desc = f"Processing batches in epoch {epoch}"):
             embeddings = batch['embeddings'].to(device).float()
             labels = batch['labels'].to(device).long()
+
+            labeled_idx = torch.argwhere((labels != -5).int())
+
+            #embeddings = embeddings[labeled_idx]
+            #labels = labels[labeled_idx]
+
+            print(embeddings.shape)
+            print(labels.shape)
 
             head_optimizer.zero_grad()
             outputs = classification_head(embeddings)

@@ -23,6 +23,8 @@ def train_model(model, train_data, num_epochs, loss_func, optimizer, device, ret
     path: Where to save the model
     """
     losses = []
+
+
     for epoch in range(num_epochs):
         data_pbar = tqdm(enumerate(train_data))
         for i, batch in data_pbar:
@@ -30,7 +32,7 @@ def train_model(model, train_data, num_epochs, loss_func, optimizer, device, ret
             images = batch['pixel_values'].to(device)
             labels = batch['labels'].to(device)
             embeddings = model(images)
-            # Pass embeddings, labels, and mined triplets
+
             loss = loss_func(embeddings, labels)
             optimizer.zero_grad()
             loss.backward()
@@ -44,6 +46,56 @@ def train_model(model, train_data, num_epochs, loss_func, optimizer, device, ret
     
     if return_losses:
         return losses
+
+
+def get_output_size(model):
+    return model._modules['vit']._modules['pooler']._modules['dense'].out_features
+
+
+def init_center_c(model, train_loader, device, eps=0.1):
+    """Initialize hypersphere center c as the mean from an initial forward pass on the data."""
+    n_samples = 0
+
+    model_size = get_output_size(model)
+    c = torch.zeros(model_size, device=device)
+
+    model.eval()
+    with torch.no_grad():
+        for batch in train_loader:
+            # get the inputs of the batch
+            inputs = batch['pixel_values']
+            inputs = inputs.to(device)
+            outputs = model(inputs)
+            n_samples += outputs.shape[0]
+            c += torch.sum(outputs, dim=0)
+
+    c /= n_samples
+
+    # If c_i is too close to 0, set to +-eps. Reason: a zero unit can be trivially matched with zero weights.
+    c[(abs(c) < eps) & (c < 0)] = -eps
+    c[(abs(c) < eps) & (c > 0)] = eps
+
+    return c
+
+
+def deepsad_loss(model, train_data, device, eta, eps = 1e-6):
+    c = init_center_c(model, train_data, device)
+
+    def compute_deepsad_loss(embeddings, labels):
+        dist = torch.sum((embeddings - c) ** 2, dim=1)
+
+        labels[labels == 0] = -1
+        labels = -1 * labels
+
+        losses = torch.where(labels == 5, dist, eta * ((dist + eps) ** labels.float()))
+        loss = torch.mean(losses)
+        return loss
+
+    return compute_deepsad_loss
+
+
+
+
 
 
 #Returns triplet margin loss function with margin m
