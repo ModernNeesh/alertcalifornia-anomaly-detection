@@ -165,7 +165,7 @@ def get_train_val_test(data = None, df_dir = None, output_csvs = False, csv_outp
             "img_directory": X_test['img_path'].values,
             "img_url": X_test['image'].values,
             "annotation_id": X_test['annotation_id'].values,
-            "timestamp" : X_val['timestamp'].values,
+            "timestamp" : X_test['timestamp'].values,
             "label": y_test.values
         }).reset_index(drop=True)
 

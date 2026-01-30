@@ -64,17 +64,24 @@ labels_csv = args.camera_data_dir + args.labels_csv_name
 
 data = dataloading.get_data(labels_csv, args.image_dir, replace_images = args.image_download)
 
-new_label_column = data['choice'].sample(3000)
-
-data['choice'] = new_label_column
-
-data['choice'] = data['choice'].fillna(-5)
-
 train, val, test = dataloading.get_train_val_test(data = data, output_csvs=True)
+
+new_label_column = train['label'].sample(len(train) // 2)
+
+train['label'] = new_label_column
+
+train['label'] = train['label'].fillna(-5)
+
+
+labeled_train = train.dropna(axis = 0)
 
 train_dataset, val_dataset, test_dataset = dataloading.get_datasets(train, val, test)
 
+labeled_train_dataset, _, _ = dataloading.get_datasets(labeled_train, val, test)
+
 train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True, pin_memory=True)
+labeled_train_dataloader = DataLoader(labeled_train_dataset, batch_size=32, shuffle=True, pin_memory=True)
+
 val_dataloader = DataLoader(val_dataset, batch_size=32, shuffle=True, pin_memory=True)
 test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=True, pin_memory=True)
 
@@ -123,7 +130,7 @@ try:
 except Exception:
     pass
 
-dataloading.save_full_embeddings(encoder, train_dataloader, 
+dataloading.save_full_embeddings(encoder, labeled_train_dataloader, 
                         "train_embeddings", persist_directory = args.collection_dir, 
                         device = device)
 
@@ -138,7 +145,7 @@ dataloading.save_full_embeddings(encoder, test_dataloader,
     
     
 #Embeddings of training data, used to train the classification head
-train_embeddings, train_labels, _, _ = dataloading.load_full_embeddings(train, "train_embeddings", persist_directory = args.collection_dir)
+train_embeddings, train_labels, _, _ = dataloading.load_full_embeddings(labeled_train, "train_embeddings", persist_directory = args.collection_dir)
 train_embedding_dataset = dataloading.CustomEmbeddingDataset(train_embeddings, train_labels)
 train_embedding_dataloader = DataLoader(train_embedding_dataset, batch_size=32, shuffle=True, pin_memory=True)
 

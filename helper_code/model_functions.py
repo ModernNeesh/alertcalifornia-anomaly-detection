@@ -78,24 +78,23 @@ def init_center_c(model, train_loader, device, eps=0.1):
     return c
 
 
-def deepsad_loss(model, train_data, device, eta, eps = 1e-6):
-    c = init_center_c(model, train_data, device)
+class DeepSADLoss():
 
-    def compute_deepsad_loss(embeddings, labels):
-        dist = torch.sum((embeddings - c) ** 2, dim=1)
+    def __init__(self, model, train_data, device, eta, c = None, eps = 1e-6):
+        if c is None:
+            self.c = init_center_c(model, train_data, device)
+        self.eta = eta
+        self.eps = eps
+
+    def __call__(self, embeddings, labels):
+        dist = torch.sum((embeddings - self.c) ** 2, dim=1)
 
         labels[labels == 0] = -1
         labels = -1 * labels
 
-        losses = torch.where(labels == 5, dist, eta * ((dist + eps) ** labels.float()))
+        losses = torch.where(labels == 5, dist, self.eta * ((dist + self.eps) ** labels.float()))
         loss = torch.mean(losses)
         return loss
-
-    return compute_deepsad_loss
-
-
-
-
 
 
 #Returns triplet margin loss function with margin m
