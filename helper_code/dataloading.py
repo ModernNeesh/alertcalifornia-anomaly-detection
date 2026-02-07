@@ -12,8 +12,23 @@ from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 import gc
 from requests.adapters import HTTPAdapter, Retry
+import numpy as np
 
 
+
+
+
+#Helper function to get annotation result from differently formatted data
+def get_annotation_result(x):
+    if len(x) < 1:
+        return np.nan
+    else:
+        result = x[0]['result']
+
+        if len(result) < 1:
+            return np.nan
+        else:
+            return result[0]['value']['choices'][0]
 
 
 
@@ -23,11 +38,22 @@ def get_data_urls(labels_csv):
     labels_csv: The annotation file exported from LabelStudio, in csv form
     
     """
-    data = pd.read_csv(labels_csv)
-    data = data.get(["choice", "image", "annotation_id", ]).dropna()
+    if 'json' in labels_csv:
+        raw_data = pd.read_json(labels_csv)
+
+        annotations = raw_data['annotations'].apply(get_annotation_result)
+        images = raw_data['data'].apply(lambda x: x['image'])
+        ids = raw_data['id']
+
+        data = pd.DataFrame({'choice' : annotations, 'image' : images, 'annotation_id' : ids})
+
+    else:
+        data = pd.read_csv(labels_csv)
+        data = data.get(["choice", "image", "annotation_id", ]).dropna()
 
 
-    data["choice"] = data["choice"].str.extract(r"(\d)").astype(int) - 1
+
+    data["choice"] = data["choice"].fillna('0').str.extract(r"(\d)").astype(int) - 1
 
     return data
 
@@ -52,9 +78,6 @@ def download_images(data, image_dir, replace_images):
     )
     session.mount("https://", HTTPAdapter(max_retries=retries))
 
-    # Rate limits
-    BATCH_SIZE = 20     # number of images before resting
-    SLEEP_TIME = 1.5    # seconds to sleep after each batch
 
     for i in tqdm(range(len(data))):
         url = data.iloc[i]['image']
@@ -77,9 +100,6 @@ def download_images(data, image_dir, replace_images):
             print(f"Error for ID {ann_id}: {e}")
             continue
 
-        # Gentle rate limiting
-        if i % BATCH_SIZE == 0 and i != 0:
-            time.sleep(SLEEP_TIME)
 
 
 

@@ -14,6 +14,8 @@ from chromadb.errors import InternalError as CollectionError
 import helper_code.dataloading as dataloading
 import helper_code.data_vis as data_vis
 import helper_code.model_functions as model_functions
+import helper_code.loss_functions as loss_functions
+import helper_code.models as models
 
 
 torch.manual_seed(1234)
@@ -77,13 +79,13 @@ print(f"Data loading complete.")
 #Train the model
 print(f"Training model {args.model_name}...")
 
-encoder = model_functions.create_encoder()
+encoder = models.create_encoder()
 encoder.to(device)
 
 
 if args.model_train:
     num_epochs = 1
-    loss_func = model_functions.triplet_loss(margin=0.19)
+    loss_func = loss_functions.triplet_loss(margin=0.19)
     optimizer = optim.Adam(encoder.parameters(), lr=2e-5) 
 
     model_functions.train_model(encoder, train_data=train_dataloader, 
@@ -152,7 +154,7 @@ print(f"Embedding loading complete. Training and test data embeddings are saved 
 print("Training classification head...")
 
 
-classification_head = model_functions.ClassificationHead()
+classification_head = models.ClassificationHead()
 classification_head.to(device)
 
 head_criterion = nn.CrossEntropyLoss()
