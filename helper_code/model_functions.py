@@ -5,6 +5,7 @@ from pytorch_metric_learning.miners import TripletMarginMiner
 import torch
 from sklearn.decomposition import PCA
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 
@@ -60,6 +61,72 @@ def triplet_loss(margin = 0.2):
 
     return compute_triplet_loss
 
+# Implementation of arcface loss starts here
+class ArcFaceLoss(nn.Module):
+    """
+    ArcFace: Additive Angular Margin Loss
+    Deng et al., CVPR 2019.
+    """
+
+    def __init__(self, num_classes: int, embedding_dim: int,
+                 s: float = 30.0, m: float = 0.3):
+        super().__init__()
+        self.num_classes = num_classes
+        self.embedding_dim = embedding_dim
+        self.s = s
+        self.m = m
+
+        # Class weights (like a linear layer without bias)
+        self.weight = nn.Parameter(torch.randn(num_classes, embedding_dim))
+        nn.init.xavier_uniform_(self.weight)
+
+    def forward(self, embeddings: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+        """
+        embeddings : (B, D) float tensor
+        labels     : (B,) long tensor with class indices in [0, num_classes-1]
+        """
+        # L2-normalize features and weights so dot-product = cosine similarity
+        embeddings = F.normalize(embeddings, p=2, dim=1)      # (B, D)
+        weight = F.normalize(self.weight, p=2, dim=1)         # (C, D)
+
+        # Cosine similarities: (B, C)
+        cosine = F.linear(embeddings, weight)                 # = embeddings @ weight.T
+
+        # Cosine for the ground-truth class
+        cosine_y = cosine.gather(1, labels.view(-1, 1))       # (B, 1)
+
+        # Convert to angle, add margin, then back to cosine
+        theta_y = torch.acos(torch.clamp(cosine_y, -1.0 + 1e-7, 1.0 - 1e-7))
+        cosine_y_m = torch.cos(theta_y + self.m)
+
+        # Replace cos(theta_y) with cos(theta_y + m) in the logits
+        logits = cosine.clone()
+        logits.scatter_(1, labels.view(-1, 1), cosine_y_m)
+
+        # Apply scale
+        logits = logits * self.s
+
+        # Standard cross-entropy over modified logits
+        loss = F.cross_entropy(logits, labels)
+        return loss
+
+
+def arcface_loss(num_classes: int,
+                 embedding_dim: int = 768,
+                 s: float = 30.0,
+                 m: float = 0.3,
+                 device: torch.device | str | None = None):
+    """
+    Factory function (similar style to `triplet_loss`) that returns
+    a callable loss object: loss(embeddings, labels) -> scalar.
+    """
+    criterion = ArcFaceLoss(num_classes=num_classes,
+                            embedding_dim=embedding_dim,
+                            s=s, m=m)
+    if device is not None:
+        criterion = criterion.to(device)
+    return criterion
+# ends here
 
 #Get embeddings of first batch of data loader
 def get_batch_embeddings(model, data, device, return_ids=False):
