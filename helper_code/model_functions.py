@@ -1,10 +1,7 @@
-from transformers import ViTModel, ViTImageProcessor
 from tqdm import tqdm
-from pytorch_metric_learning.losses import TripletMarginLoss
-from pytorch_metric_learning.miners import TripletMarginMiner
 import torch
 from sklearn.decomposition import PCA
-import torch.nn as nn
+
 
 
 
@@ -23,6 +20,8 @@ def train_model(model, train_data, num_epochs, loss_func, optimizer, device, ret
     path: Where to save the model
     """
     losses = []
+
+
     for epoch in range(num_epochs):
         data_pbar = tqdm(enumerate(train_data))
         for i, batch in data_pbar:
@@ -30,7 +29,7 @@ def train_model(model, train_data, num_epochs, loss_func, optimizer, device, ret
             images = batch['pixel_values'].to(device)
             labels = batch['labels'].to(device)
             embeddings = model(images)
-            # Pass embeddings, labels, and mined triplets
+
             loss = loss_func(embeddings, labels)
             optimizer.zero_grad()
             loss.backward()
@@ -44,21 +43,49 @@ def train_model(model, train_data, num_epochs, loss_func, optimizer, device, ret
     
     if return_losses:
         return losses
+    
+
+def train_classification_head(model, train_data, num_epochs, criterion, optimizer, device, model_name="model", model_path = "weights/", save=True):
+
+    losses = []
+
+    head_criterion = criterion
+    head_optimizer = optimizer
+
+    head_name = model_path + model_name[:-4] + "_head.pth"
 
 
-#Returns triplet margin loss function with margin m
-def triplet_loss(margin = 0.2):
-    def compute_triplet_loss(embeddings, labels):
-        loss_func = TripletMarginLoss(margin=margin)
-        miner = TripletMarginMiner(margin=margin, type_of_triplets="semihard")
 
-        mined_triplets = miner(embeddings, labels)
+    num_epochs = 1
+    for epoch in range(num_epochs):
+        model.train() # Set model to training mode
 
-        # Pass embeddings, labels, and mined triplets
-        loss = loss_func(embeddings, labels, mined_triplets)
-        return loss
+        for batch in tqdm(train_data, desc = f"Processing batches in epoch {epoch}"):
+            embeddings = batch['embeddings'].to(device).float()
+            labels = batch['labels'].to(device).long()
 
-    return compute_triplet_loss
+            head_optimizer.zero_grad()
+            outputs = model(embeddings)
+            loss = head_criterion(outputs, labels)
+            loss.backward()
+            head_optimizer.step()
+
+            losses.append(loss.item())
+    if save == True:
+        torch.save(model.state_dict(), head_name)
+
+    return losses
+
+def get_classification_accuracy(embeddings, labels, model, device):
+    embeddings_tensor = torch.Tensor(embeddings.to_numpy()).to(device)
+    labels_tensor = torch.Tensor(labels.to_numpy()).to(device)
+
+
+    outputs = model(embeddings_tensor)
+
+    return (torch.argmax(outputs, dim = -1) == labels_tensor).float().mean().item()
+
+
 
 
 #Get embeddings of first batch of data loader
@@ -92,43 +119,5 @@ def reduce_pca(embeddings, labels, dimensions = 2):
 
     return reduced_embedding, labels
 
-#Class to make the encoder. It has the ViT architecture, just removes the classification head.
-class ViTEmbeddingNet(nn.Module):
-    def __init__(self, vit_model):
-        super().__init__()
-        self.vit = vit_model
-        
-    def forward(self, pixel_values: torch.FloatTensor,labels: torch.LongTensor = None):
-        outputs = self.vit(pixel_values)
-        # Use [CLS] token (first token in the sequence) as embedding
-        return outputs.last_hidden_state[:, 0]
-    
-#Classification head for model
-class ClassificationHead(nn.Module):
-    def __init__(self, input_dim = 768, num_classes = 5, hidden_dim=128):
-        super().__init__()
-        self.norm = nn.LayerNorm(input_dim)
-        self.head = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(), # or nn.GELU(), etc.
-            nn.Linear(hidden_dim, num_classes)
-        )
-    def forward(self, x):
-        x = self.norm(x)
-        return self.head(x)
-    
-#Puts encoder and classification head together
-class FullModel(nn.Module):
-    def __init__(self, encoder, classification_head):
-        self.encoder = encoder
-        self.head = classification_head
 
 
-    def forward(self, pixel_values: torch.FloatTensor,labels: torch.LongTensor = None):
-        embeddings = self.encoder(pixel_values, labels)
-        return self.head(embeddings)
-
-def create_encoder(model_name = "google/vit-base-patch16-224"):
-    model_name = "google/vit-base-patch16-224"
-    vit = ViTModel.from_pretrained(model_name, dtype=torch.float32)
-    return ViTEmbeddingNet(vit)

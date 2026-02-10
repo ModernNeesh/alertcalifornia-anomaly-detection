@@ -2,6 +2,9 @@ from transformers import ViTModel, ViTImageProcessor
 import torch.nn as nn
 import torch
 
+
+torch.manual_seed(1234)
+
 #Class to make the encoder. It has the ViT architecture, just removes the classification head.
 class ViTEmbeddingNet(nn.Module):
     def __init__(self, vit_model):

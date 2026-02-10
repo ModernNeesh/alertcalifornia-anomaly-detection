@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader
 import torch
 import torch.optim as optim
 import torch.nn as nn
+import torch.nn.functional as F
 from tqdm import tqdm
 
 from chromadb import PersistentClient as PersistentClient
@@ -47,8 +48,11 @@ if __name__ == "__main__":
     parser.add_argument("--collection-dir", default = "embedding_data/", 
                         help = "The directory to save embeddings to")
     
+    parser.add_argument("--eta", default = "1", help= "The eta hyperparameter for the SAD loss function")
+    parser.add_argument("--alpha", default = "1", help= "The alpha hyperparameter for the SAD loss function")
+    
 
-    parser.set_defaults(image_download=True, model_train=True, embedding_save = True)
+    parser.set_defaults(image_download=False, model_train=True, embedding_save = True)
     
     args = parser.parse_args()
 
@@ -56,6 +60,9 @@ if __name__ == "__main__":
         device = "cuda" if torch.cuda.is_available() else "cpu"
     else:
         device = args.device
+
+    eta = float(args.eta)
+    alpha = float(args.alpha)
 
     print("Using device:", device)
 
@@ -65,11 +72,15 @@ print(f"Loading data...")
 labels_csv = args.camera_data_dir + args.labels_csv_name
 
 data = dataloading.get_data(labels_csv, args.image_dir, replace_images = args.image_download)
+labeled_data = data[data['choice'] > -1]
 
-train, val, test = dataloading.get_train_val_test(data = data, output_csvs=True)
+full_train, _, _ = dataloading.get_train_val_test(data = data, output_csvs=False)
+train, val, test = dataloading.get_train_val_test(data = labeled_data, output_csvs=True)
 
+full_train_dataset, _, _ = dataloading.get_datasets(full_train, val, test)
 train_dataset, val_dataset, test_dataset = dataloading.get_datasets(train, val, test)
 
+full_train_dataloader = DataLoader(full_train_dataset, batch_size=32, shuffle=True, pin_memory=True)
 train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True, pin_memory=True)
 val_dataloader = DataLoader(val_dataset, batch_size=32, shuffle=True, pin_memory=True)
 test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=True, pin_memory=True)
@@ -77,7 +88,6 @@ test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=True, pin_memo
 
 print(f"Data loading complete.")
 #Train the model
-print(f"Training model {args.model_name}...")
 
 encoder = models.create_encoder()
 encoder.to(device)
@@ -85,14 +95,16 @@ encoder.to(device)
 
 if args.model_train:
     num_epochs = 1
-    loss_func = loss_functions.triplet_loss(margin=0.19)
+    print("Initializing loss...")
+    loss_func = loss_functions.HierarchicalSADLoss(model=encoder, train_data=train_dataloader, 
+                                                   num_classes = 4, device = device, eta = eta, alpha = alpha)
     optimizer = optim.Adam(encoder.parameters(), lr=2e-5) 
-
-    model_functions.train_model(encoder, train_data=train_dataloader, 
+    print(f"Training model {args.model_name}...")
+    model_functions.train_model(encoder, train_data=full_train_dataloader, 
                                 num_epochs=num_epochs, loss_func=loss_func, 
                                 optimizer=optimizer, name = args.model_name, path = args.model_path, device=device)
 else:
-    encoder.load_state_dict(torch.load(args.model_path + args.model_name, map_location=device, weights_only=True))
+    encoder.load_state_dict(torch.load(args.model_path + args.model_name, map_location=device))
 encoder.eval()
 
 
@@ -176,6 +188,7 @@ else:
 
             head_optimizer.zero_grad()
             outputs = classification_head(embeddings)
+
             loss = head_criterion(outputs, labels)
             loss.backward()
             head_optimizer.step()

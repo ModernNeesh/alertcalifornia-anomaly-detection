@@ -3,7 +3,7 @@ from pytorch_metric_learning.miners import TripletMarginMiner
 import torch
 import torch.nn as nn
 
-
+torch.manual_seed(1234)
 
 
 """
@@ -16,51 +16,76 @@ def get_output_size(model):
 
 
 #Given the model and data, initialize the cluster centers c
-def init_center_c(model, train_loader, device, eps=0.1):
+def init_centers_c(model, train_loader, num_classes, device, eps=0.1):
     """Initialize hypersphere center c as the mean from an initial forward pass on the data."""
-    n_samples = 0
+    
+    
+    n_samples = torch.zeros(num_classes, device = device)
 
     model_size = get_output_size(model)
-    c = torch.zeros(model_size, device=device)
+    c = torch.zeros(num_classes, model_size, device=device)
 
     model.eval()
     with torch.no_grad():
         for batch in train_loader:
             # get the inputs of the batch
             inputs = batch['pixel_values']
+            labels = batch['labels']
+
             inputs = inputs.to(device)
             outputs = model(inputs)
-            n_samples += outputs.shape[0]
-            c += torch.sum(outputs, dim=0)
 
-    c /= n_samples
+            unique_labels, counts = torch.unique(labels, return_counts = True)
+            for label in unique_labels:
+                c[label] += torch.sum(outputs[labels == label], dim=0)
+
+                count = counts[torch.argwhere(unique_labels == label)].item()
+
+                n_samples[label] += count
+            
+    c = c.T / n_samples
 
     # If c_i is too close to 0, set to +-eps. Reason: a zero unit can be trivially matched with zero weights.
     c[(abs(c) < eps) & (c < 0)] = -eps
     c[(abs(c) < eps) & (c > 0)] = eps
 
-    return c
+    return c.T
 
-
-#DeepSAD loss class. After initializing, it can be called as a function.
-class DeepSADLoss():
+#Hierarchical SAD loss class. After initializing, it can be called as a function.
+class HierarchicalSADLoss():
 
     #Initialize using model, training data, and hyperparameters
-    def __init__(self, model, train_data, device, eta, c = None, eps = 1e-6):
+    def __init__(self, model, train_data, num_classes, device, eta, alpha, c = None, eps = 1e-6):
+        self.num_classes = num_classes
         if c is None:
-            self.c = init_center_c(model, train_data, device)
+            self.c = init_centers_c(model, train_data, num_classes, device)
+            self.c_norm = self.c[0, :]
         self.eta = eta
         self.eps = eps
+        self.alpha = alpha
+        self.device = device
+        
 
     #Takes in embeddings and labels, returns a scalar value for the loss.
     def __call__(self, embeddings, labels):
-        dist = torch.sum((embeddings - self.c) ** 2, dim=1)
+        normal_dist = torch.sum((embeddings - self.c_norm) ** 2, dim=1)
 
-        labels[labels == 0] = -1
-        labels = -1 * labels
+        normal_classes = torch.tensor([0,1], device = self.device) #HARDCODED: Might be best to change later
+        binary_labels = torch.where(torch.isin(labels, normal_classes), -1, 1)
 
-        losses = torch.where(labels == 5, dist, self.eta * ((dist + self.eps) ** labels.float()))
+        losses = (normal_dist + self.eps) ** binary_labels.float()
         loss = torch.mean(losses)
+
+        anomalous_labels = torch.tensor([1,2,3], device=self.device) #HARDCODED: Might be best to change later
+        anomalous_count = torch.isin(labels, anomalous_labels).shape[0]
+
+        anomalous_dists = torch.empty(0, device=self.device)
+        for label in anomalous_labels:
+            anomalous_dists = torch.cat((anomalous_dists, torch.sum((embeddings[labels == label] - self.c[label]) ** 2, dim=1)))
+
+        l_anom = torch.sum(anomalous_dists) / anomalous_count
+
+        loss += self.alpha * l_anom
         return loss
     
 
