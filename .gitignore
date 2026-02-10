@@ -236,6 +236,7 @@ filtered_data/
 camera_data/images/*
 camera_data/dataframes/*
 camera_data/*.csv
+camera_data/*.json
 images_for_report/
 import_data_ptz/
 scene_data/

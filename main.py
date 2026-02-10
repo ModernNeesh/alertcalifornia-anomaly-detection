@@ -91,14 +91,15 @@ print(f"Data loading complete.")
 
 encoder = models.create_encoder()
 encoder.to(device)
+encoder.load_state_dict(torch.load('weights/model_weights_camera_10-27-25.pth', map_location=device, weights_only=True));
 
 
 if args.model_train:
     num_epochs = 1
     print("Initializing loss...")
-    loss_func = loss_functions.HierarchicalSADLoss(model=encoder, train_data=train_dataloader, 
-                                                   num_classes = 4, device = device, eta = eta, alpha = alpha)
-    optimizer = optim.Adam(encoder.parameters(), lr=2e-5) 
+    #loss_func = loss_functions.triplet_loss(margin=0.19)
+    loss_func = loss_functions.HierarchicalSADLoss(model=encoder, train_data=train_dataloader, num_classes = 4, device = device, eta = eta, alpha = alpha)
+    optimizer = optim.Adam(encoder.parameters(), lr=1e-5, weight_decay=1e-6) 
     print(f"Training model {args.model_name}...")
     model_functions.train_model(encoder, train_data=full_train_dataloader, 
                                 num_epochs=num_epochs, loss_func=loss_func, 
@@ -152,13 +153,9 @@ train_embedding_dataloader = DataLoader(train_embedding_dataset, batch_size=32, 
 
 #Embeddings of validation data, used to display results
 val_embeddings, val_labels, _, _ = dataloading.load_full_embeddings(val, "val_embeddings", persist_directory = args.collection_dir)
-val_embedding_dataset = dataloading.CustomEmbeddingDataset(val_embeddings, val_labels)
-val_embedding_dataloader = DataLoader(val_embedding_dataset, batch_size=32, shuffle=True, pin_memory=True)
 
 #Embeddings of test data, used to evaluate classification head
 test_embeddings, test_labels, _, _ = dataloading.load_full_embeddings(test, "test_embeddings", persist_directory = args.collection_dir)
-test_embedding_dataset = dataloading.CustomEmbeddingDataset(test_embeddings, test_labels)
-test_embedding_dataloader = DataLoader(test_embedding_dataset, batch_size=32, shuffle=True, pin_memory=True)
 
 print(f"Embedding loading complete. Training and test data embeddings are saved at {args.collection_dir} under the \
     names 'train_embeddings' and 'test_embeddings' respectively.")
@@ -170,7 +167,7 @@ classification_head = models.ClassificationHead()
 classification_head.to(device)
 
 head_criterion = nn.CrossEntropyLoss()
-head_optimizer = optim.Adam(classification_head.parameters(), lr=1e-4) # Optimize only the new head
+head_optimizer = optim.Adam(classification_head.parameters(), lr=2e-3) # Optimize only the new head
 
 head_name = args.model_path + args.model_name[:-4] + "_head.pth"
 
