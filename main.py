@@ -98,6 +98,7 @@ if args.model_train:
     num_epochs = 1
     print("Initializing loss...")
     #loss_func = loss_functions.triplet_loss(margin=0.19)
+    #optimizer = optim.Adam(encoder.parameters(), lr=2e-5)
     loss_func = loss_functions.HierarchicalSADLoss(model=encoder, train_data=train_dataloader, num_classes = 4, device = device, eta = eta, alpha = alpha)
     optimizer = optim.Adam(encoder.parameters(), lr=1e-5, weight_decay=1e-6) 
     print(f"Training model {args.model_name}...")
