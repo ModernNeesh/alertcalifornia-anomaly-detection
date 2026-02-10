@@ -49,7 +49,7 @@ if __name__ == "__main__":
                         help = "The directory to save embeddings to")
     
     parser.add_argument("--eta", default = "1", help= "The eta hyperparameter for the SAD loss function")
-    parser.add_argument("--alpha", default = "1", help= "The alpha hyperparameter for the SAD loss function")
+    parser.add_argument("--alpha", default = "10", help= "The alpha hyperparameter for the SAD loss function")
     
 
     parser.set_defaults(image_download=False, model_train=True, embedding_save = True)
