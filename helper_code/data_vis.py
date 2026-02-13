@@ -18,9 +18,15 @@ from matplotlib.lines import Line2D
 def plot_data(X, y, pcx=1, pcy=2,
               colors = {0 : "purple", 1 : "gold"} , 
               names = {0 : "Normal", 1 : "Abnormal"},
-              size=(8, 6), highlight_idx=None):
+              size=(8, 6), highlight_idx=None, ax=None, title = None):
     
-    fig, ax = plt.subplots(figsize=size)
+    if ax is None:
+        fig, ax = plt.subplots(figsize=size)
+    else:
+        fig = ax.figure
+
+    if title is not None:
+        ax.set_title(title)
 
     custom_cmap = ListedColormap(list(colors.values()))
     
@@ -32,12 +38,15 @@ def plot_data(X, y, pcx=1, pcy=2,
                 for i in colors
             ]
 
-    ax.legend(handles=handles, title="Classes", loc="upper right")
+    #ax.legend(handles=handles, title="Classes", loc="upper right")
 
     if highlight_idx is not None:
         for idx in highlight_idx:
             ax.scatter(X[idx, pcx-1], X[idx, pcy-1],
                        s=80, facecolors="none", edgecolors="red", linewidths=2)
+            
+    return ax
+
 
 def plot_density_by_class(X, y, pc=1,
                           colors={0: "purple", 1: "gold"},
