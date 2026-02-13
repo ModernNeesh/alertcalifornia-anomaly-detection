@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader
 import torch
 import torch.optim as optim
 import torch.nn as nn
+import torch.nn.functional as F
 from tqdm import tqdm
 
 from chromadb import PersistentClient as PersistentClient
@@ -14,6 +15,8 @@ from chromadb.errors import InternalError as CollectionError
 import helper_code.dataloading as dataloading
 import helper_code.data_vis as data_vis
 import helper_code.model_functions as model_functions
+import helper_code.loss_functions as loss_functions
+import helper_code.models as models
 
 
 torch.manual_seed(1234)
@@ -45,8 +48,11 @@ if __name__ == "__main__":
     parser.add_argument("--collection-dir", default = "embedding_data/", 
                         help = "The directory to save embeddings to")
     
+    parser.add_argument("--eta", default = "1", help= "The eta hyperparameter for the SAD loss function")
+    parser.add_argument("--alpha", default = "10", help= "The alpha hyperparameter for the SAD loss function")
+    
 
-    parser.set_defaults(image_download=True, model_train=True, embedding_save = True)
+    parser.set_defaults(image_download=False, model_train=True, embedding_save = True)
     
     args = parser.parse_args()
 
@@ -54,6 +60,9 @@ if __name__ == "__main__":
         device = "cuda" if torch.cuda.is_available() else "cpu"
     else:
         device = args.device
+
+    eta = float(args.eta)
+    alpha = float(args.alpha)
 
     print("Using device:", device)
 
@@ -63,34 +72,41 @@ print(f"Loading data...")
 labels_csv = args.camera_data_dir + args.labels_csv_name
 
 data = dataloading.get_data(labels_csv, args.image_dir, replace_images = args.image_download)
+labeled_data = data[data['choice'] > -1]
 
-train, val, test = dataloading.get_train_val_test(data = data, output_csvs=True)
+full_train, _, _ = dataloading.get_train_val_test(data = data, output_csvs=False)
+train, val, test = dataloading.get_train_val_test(data = labeled_data, output_csvs=True)
 
+full_train_dataset, _, _ = dataloading.get_datasets(full_train, val, test)
 train_dataset, val_dataset, test_dataset = dataloading.get_datasets(train, val, test)
 
-train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True, pin_memory=True)
-val_dataloader = DataLoader(val_dataset, batch_size=64, shuffle=True, pin_memory=True)
-test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True, pin_memory=True)
+full_train_dataloader = DataLoader(full_train_dataset, batch_size=32, shuffle=True, pin_memory=True)
+train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True, pin_memory=True)
+val_dataloader = DataLoader(val_dataset, batch_size=32, shuffle=True, pin_memory=True)
+test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=True, pin_memory=True)
 
 
 print(f"Data loading complete.")
 #Train the model
-print(f"Training model {args.model_name}...")
 
-encoder = model_functions.create_encoder()
+encoder = models.create_encoder()
 encoder.to(device)
+encoder.load_state_dict(torch.load('weights/model_weights_camera_10-27-25.pth', map_location=device, weights_only=True));
 
 
 if args.model_train:
     num_epochs = 1
-    loss_func = model_functions.triplet_loss(margin=0.19)
-    optimizer = optim.Adam(encoder.parameters(), lr=2e-5) 
-
-    model_functions.train_model(encoder, train_data=train_dataloader, 
+    print("Initializing loss...")
+    #loss_func = loss_functions.triplet_loss(margin=0.19)
+    #optimizer = optim.Adam(encoder.parameters(), lr=2e-5)
+    loss_func = loss_functions.HierarchicalSADLoss(model=encoder, train_data=train_dataloader, num_classes = 4, device = device, eta = eta, alpha = alpha)
+    optimizer = optim.Adam(encoder.parameters(), lr=1e-5, weight_decay=1e-6) 
+    print(f"Training model {args.model_name}...")
+    model_functions.train_model(encoder, train_data=full_train_dataloader, 
                                 num_epochs=num_epochs, loss_func=loss_func, 
                                 optimizer=optimizer, name = args.model_name, path = args.model_path, device=device)
 else:
-    encoder.load_state_dict(torch.load(args.model_path + args.model_name, map_location=device, weights_only=True))
+    encoder.load_state_dict(torch.load(args.model_path + args.model_name, map_location=device))
 encoder.eval()
 
 
@@ -134,17 +150,13 @@ dataloading.save_full_embeddings(encoder, test_dataloader,
 #Embeddings of training data, used to train the classification head
 train_embeddings, train_labels, _, _ = dataloading.load_full_embeddings(train, "train_embeddings", persist_directory = args.collection_dir)
 train_embedding_dataset = dataloading.CustomEmbeddingDataset(train_embeddings, train_labels)
-train_embedding_dataloader = DataLoader(train_embedding_dataset, batch_size=64, shuffle=True, pin_memory=True)
+train_embedding_dataloader = DataLoader(train_embedding_dataset, batch_size=32, shuffle=True, pin_memory=True)
 
 #Embeddings of validation data, used to display results
 val_embeddings, val_labels, _, _ = dataloading.load_full_embeddings(val, "val_embeddings", persist_directory = args.collection_dir)
-val_embedding_dataset = dataloading.CustomEmbeddingDataset(val_embeddings, val_labels)
-val_embedding_dataloader = DataLoader(val_embedding_dataset, batch_size=64, shuffle=True, pin_memory=True)
 
 #Embeddings of test data, used to evaluate classification head
 test_embeddings, test_labels, _, _ = dataloading.load_full_embeddings(test, "test_embeddings", persist_directory = args.collection_dir)
-test_embedding_dataset = dataloading.CustomEmbeddingDataset(test_embeddings, test_labels)
-test_embedding_dataloader = DataLoader(test_embedding_dataset, batch_size=64, shuffle=True, pin_memory=True)
 
 print(f"Embedding loading complete. Training and test data embeddings are saved at {args.collection_dir} under the \
     names 'train_embeddings' and 'test_embeddings' respectively.")
@@ -152,11 +164,11 @@ print(f"Embedding loading complete. Training and test data embeddings are saved 
 print("Training classification head...")
 
 
-classification_head = model_functions.ClassificationHead()
+classification_head = models.ClassificationHead()
 classification_head.to(device)
 
 head_criterion = nn.CrossEntropyLoss()
-head_optimizer = optim.Adam(classification_head.parameters(), lr=1e-4) # Optimize only the new head
+head_optimizer = optim.Adam(classification_head.parameters(), lr=2e-3) # Optimize only the new head
 
 head_name = args.model_path + args.model_name[:-4] + "_head.pth"
 
@@ -174,6 +186,7 @@ else:
 
             head_optimizer.zero_grad()
             outputs = classification_head(embeddings)
+
             loss = head_criterion(outputs, labels)
             loss.backward()
             head_optimizer.step()

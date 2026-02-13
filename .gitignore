@@ -230,12 +230,16 @@ $RECYCLE.BIN/
 *.lnk
 
 weights/*
+!weights/.gitkeep
 .venv/
 embedding_data/*
+!embedding_data/.gitkeep
 filtered_data/
 camera_data/images/*
 camera_data/dataframes/*
 camera_data/*.csv
+camera_data/*.json
+!camera_data/.gitkeep
 images_for_report/
 import_data_ptz/
 scene_data/
