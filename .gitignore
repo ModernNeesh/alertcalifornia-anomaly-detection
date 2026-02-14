@@ -239,4 +239,6 @@ camera_data/*.csv
 images_for_report/
 import_data_ptz/
 scene_data/
-metar_data/
+metar_data/.DS_Store
+camera_data/
+unused_notebooks/weights/
