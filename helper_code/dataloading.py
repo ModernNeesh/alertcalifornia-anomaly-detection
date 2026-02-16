@@ -13,8 +13,20 @@ from torch.utils.data import DataLoader
 import gc
 from requests.adapters import HTTPAdapter, Retry
 import numpy as np
+from helper_code.seeds import set_seed, seed_worker
 
 
+#Helper function to get annotation result from differently formatted data
+def get_annotation_result(x):
+    if len(x) < 1:
+        return np.nan
+    else:
+        result = x[0]['result']
+
+        if len(result) < 1:
+            return np.nan
+        else:
+            return result[0]['value']['choices'][0]
 
 
 
@@ -33,7 +45,7 @@ def get_annotation_result(x):
 
 
 #Get the label, image URL, and annotation id of the images
-def get_data_urls(labels_csv):
+def get_data_urls(labels_csv, binarize = False):
     """
     labels_csv: The annotation file exported from LabelStudio, in csv form
     
@@ -41,19 +53,12 @@ def get_data_urls(labels_csv):
     if 'json' in labels_csv:
         raw_data = pd.read_json(labels_csv)
 
-        annotations = raw_data['annotations'].apply(get_annotation_result)
-        images = raw_data['data'].apply(lambda x: x['image'])
-        ids = raw_data['id']
-
-        data = pd.DataFrame({'choice' : annotations, 'image' : images, 'annotation_id' : ids})
-
-    else:
-        data = pd.read_csv(labels_csv)
-        data = data.get(["choice", "image", "annotation_id", ]).dropna()
-
 
 
     data["choice"] = data["choice"].fillna('0').str.extract(r"(\d)").astype(int) - 1
+
+    if binarize:
+        data["choice"] = (data["choice"] > 1).astype(int)
 
     return data
 
@@ -117,7 +122,7 @@ def get_images_df(image_dir):
 
 
 #Gather the data for image labels and paths into one big DataFrame
-def get_data(labels_csv, image_dir, replace_images = False):
+def get_data(labels_csv, image_dir, replace_images = False, binarize = False):
     """
     labels_csv: The annotation file exported from LabelStudio, in csv form
 
@@ -125,7 +130,7 @@ def get_data(labels_csv, image_dir, replace_images = False):
 
     replace_images: Whether to replace the images currently in the directory
     """
-    url_data = get_data_urls(labels_csv)
+    url_data = get_data_urls(labels_csv, binarize = binarize)
 
     download_images(url_data, image_dir, replace_images)
 
@@ -256,13 +261,23 @@ class CustomEmbeddingDataset(Dataset):
     
     
 
-def get_datasets(train_df, val_df, test_df):
+def get_train_val_test_dataloaders(train_df, val_df, test_df, batch_size = 32, generator = None):
     #Creating the dataset and loading it into batches with the DataLoader class
     train_dataset = CustomImageDataset(train_df, transform=transform)
     val_dataset = CustomImageDataset(val_df, transform=transform)
     test_dataset = CustomImageDataset(test_df, transform=transform)
 
-    return train_dataset, val_dataset, test_dataset
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True, generator = generator, worker_init_fn=seed_worker)
+    val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True, pin_memory=True, generator = generator, worker_init_fn=seed_worker)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, pin_memory=True, generator = generator, worker_init_fn=seed_worker)
+
+    return train_dataloader, val_dataloader, test_dataloader
+
+def embedding_to_dataloader(embeddings, labels, batch_size = 32, generator = None):
+    dataset = CustomEmbeddingDataset(embeddings, labels)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True, generator = generator, worker_init_fn=seed_worker)
+
+    return dataloader
 
 
 #Save all the embeddings from a model to a ChromaDB dataset 
