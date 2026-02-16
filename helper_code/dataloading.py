@@ -29,21 +29,6 @@ def get_annotation_result(x):
             return result[0]['value']['choices'][0]
 
 
-
-#Helper function to get annotation result from differently formatted data
-def get_annotation_result(x):
-    if len(x) < 1:
-        return np.nan
-    else:
-        result = x[0]['result']
-
-        if len(result) < 1:
-            return np.nan
-        else:
-            return result[0]['value']['choices'][0]
-
-
-
 #Get the label, image URL, and annotation id of the images
 def get_data_urls(labels_csv, binarize = False):
     """
@@ -62,10 +47,6 @@ def get_data_urls(labels_csv, binarize = False):
     else:
         data = pd.read_csv(labels_csv)
         data = data.get(["choice", "image", "annotation_id", ]).dropna()
-
-
-
-    data["choice"] = data["choice"].fillna('0').str.extract(r"(\d)").astype(int) - 1
 
 
     data["choice"] = data["choice"].fillna('0').str.extract(r"(\d)").astype(int) - 1
