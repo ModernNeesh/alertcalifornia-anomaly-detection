@@ -53,6 +53,19 @@ def get_data_urls(labels_csv, binarize = False):
     if 'json' in labels_csv:
         raw_data = pd.read_json(labels_csv)
 
+        annotations = raw_data['annotations'].apply(get_annotation_result)
+        images = raw_data['data'].apply(lambda x: x['image'])
+        ids = raw_data['id']
+
+        data = pd.DataFrame({'choice' : annotations, 'image' : images, 'annotation_id' : ids})
+
+    else:
+        data = pd.read_csv(labels_csv)
+        data = data.get(["choice", "image", "annotation_id", ]).dropna()
+
+
+
+    data["choice"] = data["choice"].fillna('0').str.extract(r"(\d)").astype(int) - 1
 
 
     data["choice"] = data["choice"].fillna('0').str.extract(r"(\d)").astype(int) - 1
