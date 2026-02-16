@@ -49,12 +49,10 @@ def get_data_urls(labels_csv, binarize = False):
         data = data.get(["choice", "image", "annotation_id", ]).dropna()
 
 
-    data["choice"] = data["choice"].fillna('0').str.extract(r"(\d)").astype(int) - 1
-
-    if binarize:
-        data["choice"] = (data["choice"] > 1).astype(int)
+    data["choice"] = data["choice"].str.extract(r"(\d)").astype(int) - 1
 
     return data
+
 
 
 #Download the images from their URLs
@@ -136,6 +134,7 @@ def get_data(labels_csv, image_dir, replace_images = False, binarize = False):
     full_data['timestamp'] = full_data['image'].str.extract(r"https:\/\/tools\.alertcalifornia\.org\/fireframes5\/digitalpath-redis\/[^\/]+\/\d{4}\/\d{3}\/\d{2}\/(\d+)\.")
 
     return full_data
+
 
 #Split a DataFrame into train, validation, and test splits, or pull those splits from existing CSV files
 def get_train_val_test(data = None, df_dir = None, output_csvs = False, csv_output_dir = "camera_data/dataframes/"):

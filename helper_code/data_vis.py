@@ -10,7 +10,8 @@ from io import BytesIO
 import math
 import random
 from matplotlib.lines import Line2D
-
+from datetime import datetime
+from pathlib import Path
 
 
 
@@ -171,35 +172,100 @@ def plot_with_decision_boundary(
 
     return svm_classifier
 
-def save_embeddings_to_json(
-    reduced_embeddings, labels, image_urls, a_ids,
-    output_path="embedding_data/d3_data.json"
+def save_embedding_dataset(
+    reduced_embeddings,
+    labels,
+    image_urls,
+    a_ids,
+    dataset_id,
+    metadata=None,
+    label_map=None,
+    output_path="embedding_data/embeddings.json"
 ):
-    
-    reduced_embeddings = np.array(reduced_embeddings)
-    labels = np.array(labels)
+    reduced_embeddings = np.asarray(reduced_embeddings)
+    labels = np.asarray(labels)
 
-    if reduced_embeddings.shape[1] != 2:
-        raise ValueError("expected reduced_embeddings to have shape (n_samples, 2)")
 
-    if not (len(reduced_embeddings) == len(labels) == len(image_urls)):
-        raise ValueError("lengths of embeddings, labels, and image_urls must match")
+    if not (len(reduced_embeddings) == len(labels) == len(image_urls) == len(a_ids)):
+        raise ValueError("input lengths must match")
 
-    d3_data = [
-        {
-            "x": float(x),
-            "y": float(y),
-            "label": int(label),
-            "img": str(img),
-            "a_id": str(a_id)
+    dataset = {
+        "dataset_id": dataset_id,
+        "n_components": reduced_embeddings.shape[1],
+        "metadata": {
+            **metadata,
+            "created_at": datetime.now().isoformat(),
+            "num_points": len(reduced_embeddings),
+        },
+        "points": [
+            {
+                "pcs":
+                    [float(coord) for coord in embeddings],
+                "label": int(label),
+                "image_url": str(img),
+                "a_id": str(a_id)
+            }
+            for embeddings, label, img, a_id in zip(
+                reduced_embeddings, labels, image_urls, a_ids
+            )
+        ]
+    }
+
+    if label_map:
+        dataset["label_map"] = {
+            int(k): {"name": str(v["name"]), "color": str(v["color"])}
+            for k, v in label_map.items()
         }
-        for (x, y), label, img, a_id in zip(reduced_embeddings, labels, image_urls, a_ids)
-    ]
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if output_path.exists():
+        with open(output_path) as f:
+            data = json.load(f)
+    else:
+        data = {"datasets": []}
+
+    data["datasets"].append(dataset)
 
     with open(output_path, "w") as f:
-        json.dump(d3_data, f)
+        json.dump(data, f, indent=2)
 
-    print(f"saved embeddings to {output_path}!")
+    print(f"saved dataset '{dataset_id}' to {output_path}")
+
+
+def delete_embedding_dataset(dataset_id, json_path="embedding_data/embeddings.json"):
+    """
+    Delete a dataset with the given dataset_id from the JSON file.
+    """
+    json_path = Path(json_path)
+    if not json_path.exists():
+        print(f"JSON file {json_path} does not exist.")
+        return
+
+    # Load the existing data
+    with open(json_path) as f:
+        data = json.load(f)
+
+    original_count = len(data.get("datasets", []))
+
+    # Filter out the dataset to delete
+    data["datasets"] = [
+        ds for ds in data.get("datasets", [])
+        if ds.get("dataset_id") != dataset_id
+    ]
+
+    new_count = len(data["datasets"])
+    if new_count == original_count:
+        print(f"No dataset with id '{dataset_id}' found.")
+        return
+
+    # Save the updated JSON
+    with open(json_path, "w") as f:
+        json.dump(data, f, indent=2)
+
+    print(f"deleted dataset '{dataset_id}' from {json_path}")
+
 
 
 def display_images_grid(img_urls, cols=4, figsize=(20, 20)):
