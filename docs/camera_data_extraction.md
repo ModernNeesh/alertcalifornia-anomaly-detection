@@ -25,16 +25,15 @@ For each camera, define the following variables before running the script:
         "feb24": [int1, int2, int3, ..., int28],
         ...
       }
+      ```
     
     * **alternative:** A flat list of daily offset values may also be used
-
-  ```
 
 ---
 
 ### 2. Run the Extraction Script
 
-Execute the following steps in order:
+Run the following script. 
 
 ```python
 # flatten the daily offset into a list (only required if daily_offset is a dictionary)
