@@ -1,4 +1,4 @@
-# Quality of Service Anomaly Detection in Wildfire Monitoring Networks Using Vision Transformers
+# Quality of Service Anomaly Detection in Wildfire Monitoring Networks
 *Understanding how Vision Transformers can act as effective models for anomaly detection in outdoor cameras.*
 
 ## Instructions
