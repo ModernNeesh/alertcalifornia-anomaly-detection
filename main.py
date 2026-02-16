@@ -17,6 +17,7 @@ import helper_code.data_vis as data_vis
 import helper_code.model_functions as model_functions
 import helper_code.loss_functions as loss_functions
 import helper_code.models as models
+from helper_code.seeds import set_seed, seed_worker
 
 
 torch.manual_seed(1234)
@@ -26,7 +27,7 @@ if __name__ == "__main__":
     parser.add_argument("--camera-data-dir", default="camera_data/",
                         help="The location to store the camera data")
     
-    parser.add_argument("--labels-csv-name", default = "coronado_hills_data.csv",
+    parser.add_argument("--labels-csv-name", default = "coronado_hills_4pt.csv",
                         help="The csv file with image paths and labels, imported from Label Studio")
     
     parser.add_argument("--image-dir", default = "camera_data/images/",
@@ -50,9 +51,11 @@ if __name__ == "__main__":
     
     parser.add_argument("--eta", default = "1", help= "The eta hyperparameter for the SAD loss function")
     parser.add_argument("--alpha", default = "10", help= "The alpha hyperparameter for the SAD loss function")
-    
 
-    parser.set_defaults(image_download=False, model_train=True, embedding_save = True)
+    parser.add_argument('--binarize', dest = "binary", action='store_true', help = "Binarize labels into normal or abnormal")
+    parser.add_argument('--no_binarize', dest = "binary", action='store_false', help = "Don't binarize labels")
+
+    parser.set_defaults(image_download=False, model_train=True, binary=True)
     
     args = parser.parse_args()
 
@@ -66,24 +69,20 @@ if __name__ == "__main__":
 
     print("Using device:", device)
 
-
+g = set_seed()
 #Load the data
 print(f"Loading data...")
 labels_csv = args.camera_data_dir + args.labels_csv_name
 
-data = dataloading.get_data(labels_csv, args.image_dir, replace_images = args.image_download)
-labeled_data = data[data['choice'] > -1]
+data = dataloading.get_data(labels_csv, args.image_dir, replace_images = args.image_download, binarize = args.binary)
 
-full_train, _, _ = dataloading.get_train_val_test(data = data, output_csvs=False)
-train, val, test = dataloading.get_train_val_test(data = labeled_data, output_csvs=True)
+train, val, test = dataloading.get_train_val_test(data = data, output_csvs=True)
+train_dataloader, val_dataloader, test_dataloader = dataloading.get_train_val_test_dataloaders(train, val, test, generator=g)
 
-full_train_dataset, _, _ = dataloading.get_datasets(full_train, val, test)
-train_dataset, val_dataset, test_dataset = dataloading.get_datasets(train, val, test)
-
-full_train_dataloader = DataLoader(full_train_dataset, batch_size=32, shuffle=True, pin_memory=True)
-train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True, pin_memory=True)
-val_dataloader = DataLoader(val_dataset, batch_size=32, shuffle=True, pin_memory=True)
-test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=True, pin_memory=True)
+"""if not args.binary:
+    labeled_data = data[data['choice'] > -1]
+    full_train, _, _ = dataloading.get_train_val_test(data = data, output_csvs=False)
+    full_train_dataloader, _, _ = dataloading.get_train_val_test_dataloaders(full_train, full_train, full_train, generator=g)"""
 
 
 print(f"Data loading complete.")
@@ -95,14 +94,14 @@ encoder.load_state_dict(torch.load('weights/model_weights_camera_10-27-25.pth', 
 
 
 if args.model_train:
-    num_epochs = 1
+    num_epochs = 5
     print("Initializing loss...")
-    #loss_func = loss_functions.triplet_loss(margin=0.19)
-    #optimizer = optim.Adam(encoder.parameters(), lr=2e-5)
-    loss_func = loss_functions.HierarchicalSADLoss(model=encoder, train_data=train_dataloader, num_classes = 4, device = device, eta = eta, alpha = alpha)
-    optimizer = optim.Adam(encoder.parameters(), lr=1e-5, weight_decay=1e-6) 
+    loss_func = loss_functions.triplet_loss(margin=0.19)
+    optimizer = optim.Adam(encoder.parameters(), lr=1e-5)
+    #loss_func = loss_functions.HierarchicalSADLoss(model=encoder, train_data=train_dataloader, num_classes = 4, device = device, eta = eta, alpha = alpha)
+    #optimizer = optim.Adam(encoder.parameters(), lr=1e-5, weight_decay=1e-6) 
     print(f"Training model {args.model_name}...")
-    model_functions.train_model(encoder, train_data=full_train_dataloader, 
+    model_functions.train_model(encoder, train_data=train_dataloader, 
                                 num_epochs=num_epochs, loss_func=loss_func, 
                                 optimizer=optimizer, name = args.model_name, path = args.model_path, device=device)
 else:
@@ -168,7 +167,7 @@ classification_head = models.ClassificationHead()
 classification_head.to(device)
 
 head_criterion = nn.CrossEntropyLoss()
-head_optimizer = optim.Adam(classification_head.parameters(), lr=2e-3) # Optimize only the new head
+head_optimizer = optim.Adam(classification_head.parameters(), lr=1e-3) # Optimize only the new head
 
 head_name = args.model_path + args.model_name[:-4] + "_head.pth"
 
