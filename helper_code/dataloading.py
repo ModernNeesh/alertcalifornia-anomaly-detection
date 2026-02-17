@@ -51,6 +51,9 @@ def get_data_urls(labels_csv, binarize = False):
 
     data["choice"] = data["choice"].str.extract(r"(\d)").astype(int) - 1
 
+    if binarize:
+        data["choice"] = (data["choice"] > 1).astype(int)
+
     return data
 
 
@@ -283,24 +286,24 @@ def save_full_embeddings(model, data, collection_name, persist_directory = "embe
     """
     client = chromadb.PersistentClient(path=persist_directory)
     collection = client.create_collection(name=collection_name)
+    with torch.no_grad():
+        for batch in data:
+            images = batch['pixel_values'].to(device)
+            annotation_ids = batch['annotation_id']
 
-    for batch in data:
-        images = batch['pixel_values'].to(device)
-        annotation_ids = batch['annotation_id']
+            embedding = model(images)
 
-        embedding = model(images)
+            collection.add(
+                embeddings=embedding.tolist(),
+                ids = annotation_ids
+            )
 
-        collection.add(
-            embeddings=embedding.tolist(),
-            ids = annotation_ids
-        )
+            del embedding
+            del images
+            del annotation_ids
 
-        del embedding
-        del images
-        del annotation_ids
-
-        torch.cuda.empty_cache()
-        gc.collect()
+            torch.cuda.empty_cache()
+            gc.collect()
 
 
 
@@ -311,6 +314,8 @@ def load_full_embeddings(original_df, collection_name, persist_directory = "embe
     persistent_directory: The path of the ChromaDB dataset
     collection_name: The name of the ChromaDB dataset
     original_df: The name of the dataframe containing the ids, labels, and urls of the images in the dataset
+
+    Returns: embeddings, labels, urls, and annotation ids of the images in the dataset, in that order
     """
 
     client = chromadb.PersistentClient(path=persist_directory)
