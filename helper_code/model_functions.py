@@ -2,7 +2,7 @@ from tqdm import tqdm
 import torch
 from sklearn.decomposition import PCA
 
-
+torch.manual_seed(1234)
 
 
 #Train the model on the given data
@@ -95,16 +95,17 @@ def get_batch_embeddings(model, data, device, return_ids=False):
     data: Dataloader to get embeddings from
     return_ids: Whether to return annotation ids of the batch
     """
-    batch = next(iter(data))
-    images = batch['pixel_values'].to(device)
-    labels = batch['labels']
+    with torch.no_grad():
+        batch = next(iter(data))
+        images = batch['pixel_values'].to(device)
+        labels = batch['labels']
 
-    embedding = model(images)
+        embedding = model(images)
 
-    if return_ids:
-        return embedding, labels, batch['annotation_id']
-    else:
-        return embedding, labels
+        if return_ids:
+            return embedding, labels, batch['annotation_id']
+        else:
+            return embedding, labels
 
 
 #Use PCA to reduce the dimensions of the given embeddings to the given number

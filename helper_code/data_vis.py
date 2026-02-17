@@ -39,7 +39,7 @@ def plot_data(X, y, pcx=1, pcy=2,
                 for i in colors
             ]
 
-    #ax.legend(handles=handles, title="Classes", loc="upper right")
+    ax.legend(handles=handles, title="Classes", loc="upper right")
 
     if highlight_idx is not None:
         for idx in highlight_idx:
