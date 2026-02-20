@@ -1,6 +1,7 @@
 from tqdm import tqdm
 import torch
 from sklearn.decomposition import PCA
+from sklearn.metrics import precision_recall_fscore_support
 
 torch.manual_seed(1234)
 
@@ -84,6 +85,19 @@ def get_classification_accuracy(embeddings, labels, model, device):
     outputs = model(embeddings_tensor)
 
     return (torch.argmax(outputs, dim = -1) == labels_tensor).float().mean().item()
+
+def get_precision_recall_f1(embeddings, labels, model, device):
+
+    embeddings_tensor = torch.Tensor(embeddings.to_numpy()).to(device)
+    labels_tensor = torch.Tensor(labels.to_numpy()).to(device)
+
+    outputs = model(embeddings_tensor)
+    predicted_labels = torch.argmax(outputs, dim=-1).cpu().numpy()
+    true_labels = labels_tensor.cpu().numpy()
+
+    precision, recall, f1, _ = precision_recall_fscore_support(true_labels, predicted_labels, average='weighted')
+
+    return precision, recall, f1
 
 
 
