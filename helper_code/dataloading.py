@@ -49,7 +49,7 @@ def get_data_urls(labels_csv, binarize = False):
         data = data.get(["choice", "image", "annotation_id", ]).dropna()
 
 
-    data["choice"] = data["choice"].str.extract(r"(\d)").astype(int) - 1
+    data["choice"] = data["choice"].fillna("0").str.extract(r"(\d)").astype(int) - 1
 
     if binarize:
         data["choice"] = (data["choice"] > 1).astype(int)
