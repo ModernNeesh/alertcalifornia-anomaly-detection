@@ -46,7 +46,7 @@ def train_model(model, train_data, num_epochs, loss_func, optimizer, device, ret
         return losses
     
 
-def train_classification_head(model, train_data, num_epochs, criterion, optimizer, device, model_name="model", model_path = "weights/", save=True):
+def train_classification_head(model, train_data, num_epochs, criterion, optimizer, device, model_name="model.pth", model_path = "weights/", save=True):
 
     losses = []
 
