@@ -37,6 +37,7 @@ class ClassificationHead(nn.Module):
 #Puts encoder and classification head together
 class FullModel(nn.Module):
     def __init__(self, encoder, classification_head):
+        super().__init__()
         self.encoder = encoder
         self.head = classification_head
 

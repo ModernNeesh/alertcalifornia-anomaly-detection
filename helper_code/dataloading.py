@@ -30,7 +30,7 @@ def get_annotation_result(x):
 
 
 #Get the label, image URL, and annotation id of the images
-def get_data_urls(labels_csv, binarize = False):
+def get_data_urls(labels_csv, binarize = False, inference = False):
     """
     labels_csv: The annotation file exported from LabelStudio, in csv form
     
@@ -52,7 +52,7 @@ def get_data_urls(labels_csv, binarize = False):
     data["choice"] = data["choice"].fillna("0").str.extract(r"(\d)").astype(int) - 1
 
     if binarize:
-        data["choice"] = (data["choice"] > 1).astype(int)
+        data["choice"] = data["choice"].apply(lambda x: -1 if x < 0 else 1 if x > 1 else 0)
 
     return data
 
@@ -237,6 +237,31 @@ class CustomImageDataset(Dataset):
             "img_url": img_url,
             "annotation_id" : annotation_id
         }
+    
+class InferenceDataset(Dataset):
+    def __init__(self, data_df, transform = None):
+        self.data = data_df
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        image_path = self.data.iloc[idx]["img_path"]
+        img_url = self.data.iloc[idx]["image"]
+        annotation_id = str(self.data.iloc[idx]["annotation_id"])
+    
+        image = Image.open(image_path).convert('RGB')
+        
+        if self.transform:
+            image = self.transform(image)
+        
+        return {
+            "pixel_values": image,
+            "img_path": image_path,
+            "img_url": img_url,
+            "annotation_id" : annotation_id
+        }
 
 class CustomEmbeddingDataset(Dataset):
     def __init__(self, embeddings, labels):
@@ -255,7 +280,14 @@ class CustomEmbeddingDataset(Dataset):
             "labels": label, 
         }
     
-    
+
+def get_inference_dataloader(data_df, batch_size = 32, generator = None):
+    dataset = InferenceDataset(data_df, transform=transform)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, 
+                            pin_memory=True, generator = generator, 
+                            worker_init_fn=seed_worker)
+
+    return dataloader
 
 def get_train_val_test_dataloaders(train_df, val_df, test_df, batch_size = 32, generator = None):
     #Creating the dataset and loading it into batches with the DataLoader class
