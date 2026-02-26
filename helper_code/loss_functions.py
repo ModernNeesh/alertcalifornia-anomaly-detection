@@ -6,47 +6,58 @@ import torch.nn as nn
 torch.manual_seed(1234)
 
 
-
 #Takes in image-to-embedding model, returns size of embedding space
 def get_output_size(model):
     return model._modules['vit']._modules['pooler']._modules['dense'].out_features
 
 
-#Given the model and data, initialize the cluster centers c
-def init_centers_c(model, train_loader, num_classes, device, eps=0.1):
-    """Initialize hypersphere center c as the mean from an initial forward pass on the data."""
+#DeepSAD Loss: The first binarized loss we tested.
+
+class DeepSADLoss():
+
+    def __init__(self, model, train_data, device, eta, c = None, eps = 1e-6):
+        if c is None:
+            self.c = self.init_center_c(model, train_data, device)
+        self.eta = eta
+        self.eps = eps
+
+    def __call__(self, embeddings, labels):
+        dist = torch.sum((embeddings - self.c) ** 2, dim=1)
+
+        corrected_labels = torch.where(labels == -1, -5, labels) #Assumes unlabeled data is labeled as -1
+        corrected_labels = -1 * corrected_labels.float() #Convert to float and make normal labels -1 and anomalous labels 1
+
+        losses = torch.where(labels == 5, dist, self.eta * ((dist + self.eps) ** corrected_labels))
+        loss = torch.mean(losses)
+        return loss
     
-    
-    n_samples = torch.zeros(num_classes, device = device)
+    def init_center_c(model, train_loader, device, eps=0.1):
+        """Initialize hypersphere center c as the mean from an initial forward pass on the data."""
+        n_samples = 0
 
-    model_size = get_output_size(model)
-    c = torch.zeros(num_classes, model_size, device=device)
+        model_size = get_output_size(model)
+        c = torch.zeros(model_size, device=device)
 
-    model.eval()
-    with torch.no_grad():
-        for batch in train_loader:
-            # get the inputs of the batch
-            inputs = batch['pixel_values']
-            labels = batch['labels']
+        model.eval()
+        with torch.no_grad():
+            for batch in train_loader:
+                # get the inputs of the batch
+                inputs = batch['pixel_values']
+                inputs = inputs.to(device)
+                outputs = model(inputs)
+                n_samples += outputs.shape[0]
+                c += torch.sum(outputs, dim=0)
 
-            inputs = inputs.to(device)
-            outputs = model(inputs)
+        c /= n_samples
 
-            unique_labels, counts = torch.unique(labels, return_counts = True)
-            for label in unique_labels:
-                c[label] += torch.sum(outputs[labels == label], dim=0)
+        # If c_i is too close to 0, set to +-eps. Reason: a zero unit can be trivially matched with zero weights.
+        c[(abs(c) < eps) & (c < 0)] = -eps
+        c[(abs(c) < eps) & (c > 0)] = eps
 
-                count = counts[torch.argwhere(unique_labels == label)].item()
+        return c
 
-                n_samples[label] += count
-            
-    c = c.T / n_samples
 
-    # If c_i is too close to 0, set to +-eps. Reason: a zero unit can be trivially matched with zero weights.
-    c[(abs(c) < eps) & (c < 0)] = -eps
-    c[(abs(c) < eps) & (c > 0)] = eps
 
-    return c.T
 
 #Hierarchical SAD loss class. After initializing, it can be called as a function.
 class HierarchicalSADLoss():
@@ -55,7 +66,7 @@ class HierarchicalSADLoss():
     def __init__(self, model, train_data, num_classes, device, eta, alpha, c = None, eps = 1e-6):
         self.num_classes = num_classes
         if c is None:
-            self.c = init_centers_c(model, train_data, num_classes, device)
+            self.c = self.init_centers_c(model, train_data, num_classes, device)
             self.c_norm = self.c[0, :]
         self.eta = eta
         self.eps = eps
@@ -70,7 +81,7 @@ class HierarchicalSADLoss():
         normal_classes = torch.tensor([0,1], device = self.device) #HARDCODED: Might be best to change later
         binary_labels = torch.where(torch.isin(labels, normal_classes), -1, 1)
 
-        losses = (normal_dist + self.eps) ** binary_labels.float()
+        losses = torch.where(labels > -1, (normal_dist + self.eps) ** binary_labels.float(), normal_dist) 
         loss = torch.mean(losses)
 
         anomalous_labels = torch.tensor([1,2,3], device=self.device) #HARDCODED: Might be best to change later
@@ -85,6 +96,41 @@ class HierarchicalSADLoss():
         loss += self.alpha * l_anom
         return loss
     
+    #Given the model and data, initialize the cluster centers c
+    def init_centers_c(model, train_loader, num_classes, device, eps=0.1):
+        """Initialize hypersphere center c as the mean from an initial forward pass on the data."""
+        
+        
+        n_samples = torch.zeros(num_classes, device = device)
+
+        model_size = get_output_size(model)
+        c = torch.zeros(num_classes, model_size, device=device)
+
+        model.eval()
+        with torch.no_grad():
+            for batch in train_loader:
+                # get the inputs of the batch
+                inputs = batch['pixel_values']
+                labels = batch['labels']
+
+                inputs = inputs.to(device)
+                outputs = model(inputs)
+
+                unique_labels, counts = torch.unique(labels, return_counts = True)
+                for label in unique_labels:
+                    c[label] += torch.sum(outputs[labels == label], dim=0)
+
+                    count = counts[torch.argwhere(unique_labels == label)].item()
+
+                    n_samples[label] += count
+                
+        c = c.T / n_samples
+
+        # If c_i is too close to 0, set to +-eps. Reason: a zero unit can be trivially matched with zero weights.
+        c[(abs(c) < eps) & (c < 0)] = -eps
+        c[(abs(c) < eps) & (c > 0)] = eps
+
+        return c.T
 
 
 
