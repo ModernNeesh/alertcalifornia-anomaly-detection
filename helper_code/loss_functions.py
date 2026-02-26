@@ -6,9 +6,6 @@ import torch.nn as nn
 torch.manual_seed(1234)
 
 
-"""
-DeepSAD loss implementation and helper functions. TODO: Turn this into hierarchical loss 
-"""
 
 #Takes in image-to-embedding model, returns size of embedding space
 def get_output_size(model):
