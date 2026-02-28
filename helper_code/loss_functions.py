@@ -31,7 +31,7 @@ class DeepSADLoss():
         loss = torch.mean(losses)
         return loss
     
-    def init_center_c(model, train_loader, device, eps=0.1):
+    def init_center_c(self, model, train_loader, device, eps=0.1):
         """Initialize hypersphere center c as the mean from an initial forward pass on the data."""
         n_samples = 0
 

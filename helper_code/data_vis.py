@@ -40,6 +40,8 @@ def plot_data(X, y, pcx=1, pcy=2,
             ]
 
     ax.legend(handles=handles, title="Classes", loc="upper right")
+    ax.set_xlabel(f"Principal Axis {pcx}")
+    ax.set_ylabel(f"Principal Axis {pcy}")
 
     if highlight_idx is not None:
         for idx in highlight_idx:

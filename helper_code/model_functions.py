@@ -55,9 +55,6 @@ def train_classification_head(model, train_data, num_epochs, criterion, optimize
 
     head_name = model_path + model_name[:-4] + "_head.pth"
 
-
-
-    num_epochs = 1
     for epoch in range(num_epochs):
         model.train() # Set model to training mode
 

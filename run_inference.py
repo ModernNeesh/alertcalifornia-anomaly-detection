@@ -94,12 +94,12 @@ inference_dataloader = dataloading.get_inference_dataloader(data, batch_size=arg
 end_time = time.perf_counter()
 
 num_batches = len(inference_dataloader)
-elapsed_time = end_time - start_time
+loading_time = end_time - start_time
 
-print(f"Data loading and dataloader creation took {elapsed_time:.2f} seconds. \
-      Average time per batch: {elapsed_time/num_batches:.2f} seconds.")
+print(f"Data loading and dataloader creation took {loading_time:.4f} seconds. \
+      Average time per batch: {loading_time/num_batches:.4f} seconds.")
 
-total_time = 0
+inference_time = 0
 with open("outputs/inference_results.txt", "w") as f:
     for batch in tqdm(inference_dataloader, desc = "Running inference on batches"):
         start_time = time.perf_counter()
@@ -107,7 +107,7 @@ with open("outputs/inference_results.txt", "w") as f:
         outputs = full_model(images)
         end_time = time.perf_counter()
 
-        total_time += (end_time - start_time)
+        inference_time += (end_time - start_time)
 
         annotation_ids = np.array(batch['annotation_id'])
         img_urls = np.array(batch['img_url'])
@@ -120,4 +120,7 @@ with open("outputs/inference_results.txt", "w") as f:
         f.write("\n")
         np.savetxt(f, stacked, delimiter=',', fmt = "%s")
 
-print(f"Total inference time: {total_time:.2f} seconds. Average time per batch: {total_time/num_batches:.2f} seconds.")
+print(f"Total inference time: {inference_time:.4f} seconds. Average time per batch: {inference_time/num_batches:.4f} seconds.")
+
+with open("outputs/inference_throughput_results.txt", "w") as f:
+    f.write(f"{args.batch_size}, {loading_time/num_batches:.4f}, {inference_time/num_batches:.4f}, {(inference_time+loading_time)/num_batches:.4f}, {(inference_time + loading_time):.4f}")
