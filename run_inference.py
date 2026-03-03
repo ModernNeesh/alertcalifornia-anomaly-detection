@@ -25,7 +25,7 @@ g = set_seed()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Script for running inference on the trained model.")
-    parser.add_argument("--model-name", default="triplet_loss_working_model.pth",
+    parser.add_argument("--model-name", default="final_model.pth",
                         help="The name of the model to run inference on")
     
     parser.add_argument('--device', default="auto", choices=["auto", "cuda", "cpu"], 
@@ -48,6 +48,9 @@ if __name__ == "__main__":
     
     parser.add_argument("--data-csv-name", default="all_data_4pt.csv",
                         help="The location to store the camera data")
+    
+    parser.add_argument("--test-throughput", default=False, type=bool,
+                        help="Whether to test throughput of the model")
 
 
     parser.set_defaults()
@@ -100,7 +103,9 @@ print(f"Data loading and dataloader creation took {loading_time:.4f} seconds. \
       Average time per batch: {loading_time/num_batches:.4f} seconds.")
 
 inference_time = 0
-with open("outputs/inference_results.txt", "w") as f:
+
+#Write results to file in the form of: id, img_url, img_path, predicted_label, predicted_label_name
+with open("outputs/inference_results.csv", "a") as f:
     for batch in tqdm(inference_dataloader, desc = "Running inference on batches"):
         start_time = time.perf_counter()
         images = batch['pixel_values'].to(device)
@@ -109,18 +114,19 @@ with open("outputs/inference_results.txt", "w") as f:
 
         inference_time += (end_time - start_time)
 
-        annotation_ids = np.array(batch['annotation_id'])
+        ids = np.array(batch['id'])
         img_urls = np.array(batch['img_url'])
         img_paths = np.array(batch['img_path'])
         outputs_list = torch.argmax(outputs, dim = -1).cpu().detach().numpy()
         outputs_name = np.where(outputs_list == 0, "Normal", "Abnormal")
 
-        stacked = np.hstack([annotation_ids.reshape(-1, 1), img_urls.reshape(-1, 1), img_paths.reshape(-1, 1), outputs_list.reshape(-1, 1), outputs_name.reshape(-1, 1)])
+        stacked = np.hstack([ids.reshape(-1, 1), img_urls.reshape(-1, 1), img_paths.reshape(-1, 1), outputs_list.reshape(-1, 1), outputs_name.reshape(-1, 1)])
 
-        f.write("\n")
         np.savetxt(f, stacked, delimiter=',', fmt = "%s")
+        f.write("\n")
 
 print(f"Total inference time: {inference_time:.4f} seconds. Average time per batch: {inference_time/num_batches:.4f} seconds.")
 
-with open("outputs/inference_throughput_results.txt", "w") as f:
-    f.write(f"{args.batch_size}, {loading_time/num_batches:.4f}, {inference_time/num_batches:.4f}, {(inference_time+loading_time)/num_batches:.4f}, {(inference_time + loading_time):.4f}")
+if args.test_throughput:
+    with open("outputs/throughput_results.csv", "a") as f:
+        f.write(f"{args.batch_size}, {loading_time/num_batches:.4f}, {inference_time/num_batches:.4f}, {(inference_time+loading_time)/num_batches:.4f}, {(inference_time + loading_time):.4f}")
