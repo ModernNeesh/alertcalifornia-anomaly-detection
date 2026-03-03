@@ -39,18 +39,18 @@ if __name__ == "__main__":
     
     parser.add_argument("--batch-size", default = 32, type=int,
                         help="The batch size to use for inference")
-
-    parser.add_argument("--is-binarized", default = True, type = bool, 
-                        help = "Whether the model was trained on binarized labels")
     
     parser.add_argument("--camera-data-dir", default="camera_data/",
                         help="The location the camera data is stored in")
     
-    parser.add_argument("--data-csv-name", default="all_data_4pt.csv",
+    parser.add_argument("--data-csv-name", default="training_set_cameras_data.csv",
                         help="The location to store the camera data")
     
-    parser.add_argument("--test-throughput", default=False, type=bool,
+    parser.add_argument("--test-throughput", default=True, type=bool,
                         help="Whether to test throughput of the model")
+    
+    parser.add_argument("--clear-previous-results", default = True, type= bool,
+                        help = "Whether to clear previous results before running inference")
 
 
     parser.set_defaults()
@@ -69,7 +69,7 @@ model_dir = args.model_path + args.model_name
 head_name = model_dir[:-4] + "_head.pth"
 data_name = args.camera_data_dir + args.data_csv_name
 
-num_classes = 2 if args.is_binarized else 4
+num_classes = 2 
 
 #Load the model's encoder and classification head weights, and put them together into the full model
 
@@ -89,7 +89,7 @@ full_model.to(device)
 
 start_time = time.perf_counter()
 
-data = dataloading.get_data(data_name, args.image_dir, replace_images = True, binarize = args.is_binarized)
+data = dataloading.get_data(data_name, args.image_dir, replace_images = args.test_throughput, binarize = True)
 
 
 inference_dataloader = dataloading.get_inference_dataloader(data, batch_size=args.batch_size, generator=g)
@@ -103,6 +103,12 @@ print(f"Data loading and dataloader creation took {loading_time:.4f} seconds. \
       Average time per batch: {loading_time/num_batches:.4f} seconds.")
 
 inference_time = 0
+
+
+save_path = "outputs/inference_results.csv"
+if os.path.exists(save_path):
+    if args.clear_previous_results:
+        os.remove(save_path)
 
 #Write results to file in the form of: id, img_url, img_path, predicted_label, predicted_label_name
 with open("outputs/inference_results.csv", "a") as f:

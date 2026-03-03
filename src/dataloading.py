@@ -47,7 +47,7 @@ def get_annotation_result(x):
 
 
 #Get the label, image URL, and annotation id of the images
-def get_data_urls(labels_csv, binarize = False):
+def get_data_urls(labels_csv, binarize = False, include_location = False):
     """
     labels_csv: The annotation file exported from LabelStudio, in csv form
     
@@ -63,7 +63,11 @@ def get_data_urls(labels_csv, binarize = False):
 
     else:
         data = pd.read_csv(labels_csv)
-        data = data.get(["choice", "image", "id", ]).dropna()
+        if include_location:
+            data = data.get(["choice", "image", "id", "location"]).dropna()
+        else:
+            data = data.get(["choice", "image", "id", ]).dropna()
+
 
 
     data["choice"] = data["choice"].fillna("0").str.extract(r"(\d)").astype(int) - 1
