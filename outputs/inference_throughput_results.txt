@@ -1,1 +1,0 @@
-Batch Size, Time Per Batch (Loading), Time Per Batch (Inference), Total Time Per Batch, Overall Total

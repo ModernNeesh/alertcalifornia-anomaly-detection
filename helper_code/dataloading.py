@@ -21,7 +21,24 @@ def get_annotation_result(x):
     if len(x) < 1:
         return np.nan
     else:
-        result = x[0]['result']
+        #When there are two annotations for the same image, we take the most recent one. 
+        if len(x) > 1:
+            first_result_time = pd.to_datetime(x[0]['created_at'])
+            second_result_time = pd.to_datetime(x[1]['created_at'])
+            if first_result_time > second_result_time:
+                 annotation_data = x[0]
+            else:
+                 annotation_data = x[-1]
+        else:
+            annotation_data = x[0]
+
+
+        result = annotation_data['result']
+        was_cancelled = annotation_data['was_cancelled']
+
+        #Mark as unlabeled if this annotation was cancelled
+        if was_cancelled:
+            return np.nan
 
         if len(result) < 1:
             return np.nan
@@ -30,7 +47,7 @@ def get_annotation_result(x):
 
 
 #Get the label, image URL, and annotation id of the images
-def get_data_urls(labels_csv, binarize = False, inference = False):
+def get_data_urls(labels_csv, binarize = False):
     """
     labels_csv: The annotation file exported from LabelStudio, in csv form
     
@@ -42,11 +59,11 @@ def get_data_urls(labels_csv, binarize = False, inference = False):
         images = raw_data['data'].apply(lambda x: x['image'])
         ids = raw_data['id']
 
-        data = pd.DataFrame({'choice' : annotations, 'image' : images, 'annotation_id' : ids})
+        data = pd.DataFrame({'choice' : annotations, 'image' : images, 'id' : ids})
 
     else:
         data = pd.read_csv(labels_csv)
-        data = data.get(["choice", "image", "annotation_id", ]).dropna()
+        data = data.get(["choice", "image", "id", ]).dropna()
 
 
     data["choice"] = data["choice"].fillna("0").str.extract(r"(\d)").astype(int) - 1
@@ -81,7 +98,7 @@ def download_images(data, image_dir, replace_images):
 
     for i in tqdm(range(len(data))):
         url = data.iloc[i]['image']
-        ann_id = data.iloc[i]['annotation_id']
+        ann_id = data.iloc[i]['id']
         img_path = f"{image_dir}img_{ann_id}.jpg"
 
         # Skip if already downloaded
@@ -112,7 +129,7 @@ def get_images_df(image_dir):
     
     annotations = img_paths.str.extract(r"(\d+)")[0].astype(int).dropna()
 
-    return pd.DataFrame({"annotation_id" : annotations, 
+    return pd.DataFrame({"id" : annotations, 
                          "img_path" : img_paths})
 
 
@@ -131,9 +148,9 @@ def get_data(labels_csv, image_dir, replace_images = False, binarize = False):
 
     image_df = get_images_df(image_dir)
 
-    full_data = url_data.merge(image_df, left_on = "annotation_id", right_on="annotation_id")
+    full_data = url_data.merge(image_df, left_on = "id", right_on="id")
 
-    full_data = full_data.get(["choice", "img_path", "annotation_id", "image"])
+    full_data = full_data.get(["choice", "img_path", "id", "image"])
     full_data['timestamp'] = full_data['image'].str.extract(r"https:\/\/tools\.alertcalifornia\.org\/fireframes5\/digitalpath-redis\/[^\/]+\/\d{4}\/\d{3}\/\d{2}\/(\d+)\.")
 
     return full_data
@@ -159,7 +176,7 @@ def get_train_val_test(data = None, df_dir = None, output_csvs = False, csv_outp
             raise ValueError("Must include dataframe to split")
         # X: features, y: target variable
         X_train_val, X_test, y_train_val, y_test = train_test_split(
-            data[['img_path', 'image', 'annotation_id', 'timestamp']], 
+            data[['img_path', 'image', 'id', 'timestamp']], 
             data['choice'], 
             test_size=0.2, 
             random_state=147
@@ -175,7 +192,7 @@ def get_train_val_test(data = None, df_dir = None, output_csvs = False, csv_outp
         train = pd.DataFrame({
             "img_directory": X_train['img_path'].values,
             "img_url": X_train['image'].values,
-            "annotation_id": X_train['annotation_id'].values,
+            "id": X_train['id'].values,
             "timestamp" : X_train['timestamp'].values,
             "label": y_train.values
         }).reset_index(drop=True)
@@ -183,7 +200,7 @@ def get_train_val_test(data = None, df_dir = None, output_csvs = False, csv_outp
         val = pd.DataFrame({
             "img_directory": X_val['img_path'].values,
             "img_url": X_val['image'].values,
-            "annotation_id": X_val['annotation_id'].values,
+            "id": X_val['id'].values,
             "timestamp" : X_val['timestamp'].values,
             "label": y_val.values
         }).reset_index(drop=True)
@@ -191,7 +208,7 @@ def get_train_val_test(data = None, df_dir = None, output_csvs = False, csv_outp
         test = pd.DataFrame({
             "img_directory": X_test['img_path'].values,
             "img_url": X_test['image'].values,
-            "annotation_id": X_test['annotation_id'].values,
+            "id": X_test['id'].values,
             "timestamp" : X_val['timestamp'].values,
             "label": y_test.values
         }).reset_index(drop=True)
@@ -223,7 +240,7 @@ class CustomImageDataset(Dataset):
         image_path = self.data.iloc[idx]["img_directory"]
         label = int(self.data.iloc[idx]["label"])
         img_url = self.data.iloc[idx]["img_url"]
-        annotation_id = str(self.data.iloc[idx]["annotation_id"])
+        id = str(self.data.iloc[idx]["id"])
     
         image = Image.open(image_path).convert('RGB')
         
@@ -235,7 +252,7 @@ class CustomImageDataset(Dataset):
             "labels": label, 
             "img_path": image_path,
             "img_url": img_url,
-            "annotation_id" : annotation_id
+            "id" : id
         }
     
 class InferenceDataset(Dataset):
@@ -249,7 +266,7 @@ class InferenceDataset(Dataset):
     def __getitem__(self, idx):
         image_path = self.data.iloc[idx]["img_path"]
         img_url = self.data.iloc[idx]["image"]
-        annotation_id = str(self.data.iloc[idx]["annotation_id"])
+        id = str(self.data.iloc[idx]["id"])
     
         image = Image.open(image_path).convert('RGB')
         
@@ -260,7 +277,7 @@ class InferenceDataset(Dataset):
             "pixel_values": image,
             "img_path": image_path,
             "img_url": img_url,
-            "annotation_id" : annotation_id
+            "id" : id
         }
 
 class CustomEmbeddingDataset(Dataset):
@@ -321,18 +338,18 @@ def save_full_embeddings(model, data, collection_name, persist_directory = "embe
     with torch.no_grad():
         for batch in data:
             images = batch['pixel_values'].to(device)
-            annotation_ids = batch['annotation_id']
+            ids = batch['id']
 
             embedding = model(images)
 
             collection.add(
                 embeddings=embedding.tolist(),
-                ids = annotation_ids
+                ids = ids
             )
 
             del embedding
             del images
-            del annotation_ids
+            del ids
 
             torch.cuda.empty_cache()
             gc.collect()
@@ -353,7 +370,7 @@ def load_full_embeddings(original_df, collection_name, persist_directory = "embe
     client = chromadb.PersistentClient(path=persist_directory)
     collection = client.get_collection(name=collection_name)
 
-    db_output = collection.get(ids = original_df['annotation_id'].astype(str).tolist(), include = ['embeddings'])
+    db_output = collection.get(ids = original_df['id'].astype(str).tolist(), include = ['embeddings'])
     embeddings = db_output['embeddings']
     labels = original_df['label']
 
@@ -361,11 +378,11 @@ def load_full_embeddings(original_df, collection_name, persist_directory = "embe
     db_df['ids'] = db_output['ids']
     db_df['ids'] = db_df['ids'].astype('int64')
 
-    db_df = db_df.merge(original_df, left_on = 'ids', right_on='annotation_id')
+    db_df = db_df.merge(original_df, left_on = 'ids', right_on='id')
 
     embeddings = db_df.filter(items = range(0, 768))
     labels = db_df['label']
     img_urls = db_df['img_url']
-    a_ids = db_df['annotation_id']
+    a_ids = db_df['id']
 
     return embeddings, labels, img_urls, a_ids

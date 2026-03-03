@@ -67,7 +67,7 @@ class HierarchicalSADLoss():
         self.num_classes = num_classes
         if c is None:
             self.c = self.init_centers_c(model, train_data, num_classes, device)
-            self.c_norm = self.c[0, :]
+            self.c_norm = self.c[0, :] 
         self.eta = eta
         self.eps = eps
         self.alpha = alpha
@@ -79,7 +79,7 @@ class HierarchicalSADLoss():
         normal_dist = torch.sum((embeddings - self.c_norm) ** 2, dim=1)
 
         normal_classes = torch.tensor([0,1], device = self.device) #HARDCODED: Might be best to change later
-        binary_labels = torch.where(torch.isin(labels, normal_classes), -1, 1)
+        binary_labels = torch.where(torch.isin(labels, normal_classes), 1, -1)
 
         losses = torch.where(labels > -1, (normal_dist + self.eps) ** binary_labels.float(), normal_dist) 
         loss = torch.mean(losses)
@@ -97,7 +97,7 @@ class HierarchicalSADLoss():
         return loss
     
     #Given the model and data, initialize the cluster centers c
-    def init_centers_c(model, train_loader, num_classes, device, eps=0.1):
+    def init_centers_c(self, model, train_loader, num_classes, device, eps=0.1):
         """Initialize hypersphere center c as the mean from an initial forward pass on the data."""
         
         
