@@ -236,6 +236,7 @@ embedding_data/*
 !embedding_data/.gitkeep
 filtered_data/
 camera_data/images/*
+!camera_data/images/.gitkeep
 camera_data/dataframes/*
 camera_data/*.csv
 camera_data/*.json
