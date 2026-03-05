@@ -114,7 +114,7 @@ def get_batch_embeddings(model, data, device, return_ids=False):
         embedding = model(images)
 
         if return_ids:
-            return embedding, labels, batch['annotation_id']
+            return embedding, labels, batch['id']
         else:
             return embedding, labels
 
