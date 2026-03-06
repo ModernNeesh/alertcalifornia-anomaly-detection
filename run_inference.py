@@ -14,12 +14,12 @@ from chromadb import PersistentClient as PersistentClient
 from chromadb.errors import InternalError as CollectionError
 
 #library functions
-import helper_code.dataloading as dataloading
-import helper_code.data_vis as data_vis
-import helper_code.model_functions as model_functions
-import helper_code.loss_functions as loss_functions
-import helper_code.models as models
-from helper_code.seeds import set_seed, seed_worker
+import src.dataloading as dataloading
+import src.data_vis as data_vis
+import src.model_functions as model_functions
+import src.loss_functions as loss_functions
+import src.models as models
+from src.seeds import set_seed, seed_worker
 
 g = set_seed()
 
