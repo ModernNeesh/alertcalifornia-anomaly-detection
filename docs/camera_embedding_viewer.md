@@ -8,26 +8,23 @@ This document describes the steps required to load the reduced PCA embeddings fo
 
 For each camera dataset, define the following variables: 
 
-* **`reduced_embeddings`** *(np.ndarray)*: The PCA-reduced embeddings for the camera.
-  Shape: `(n_samples, 5)`
-  Each row represents one image embedding reduced to 5 principal components.
+* **`reduced_embeddings`** (`np.ndarray`): The PCA-reduced embeddings for the camera. Each row represents one image embedding reduced to 5 principal components.
+  - Shape: `(n_samples, 5)`
 
-* **`labels`** *(pd.Series or array-like)*: the label assigned to each embedding
-  Shape: `(n_samples,)`
+* **`labels`** (`pd.Series`): The label assigned to each embedding
+  - Shape: `(n_samples,)`
 
-* **`image_urls`** *(pd.Series or array-like)*: the URLs (or file paths) corresponding to each embedding image
-  Shape: `(n_samples,)`
-  These are used for hover image previews in the visualization tool.
+* **`image_urls`** (`pd.Series`): The URLs (or file paths) corresponding to each embedding image. These are used for hover image previews in the visualization tool.
+  - Shape: `(n_samples,)`
+  
 
-* **`a_ids`** *(pd.Series or array-like)*: the annotation IDs corresponding to each embedding.
-  Shape: `(n_samples,)`
+* **`a_ids`** (`pd.Series`): The annotation IDs corresponding to each embedding.
+  - Shape: `(n_samples,)`
 
-* **`dataset_id`** *(string)* the unique dataset identifier
-  This value populates the **camera dropdown menu** in the viewer
-  **Convention:**
-  Use the camera’s human-readable name (e.g., `"Mesa Grande N"`).
+* **`dataset_id`** (string): The unique dataset identifier. This value populates the **Dataset dropdown menu** in the viewer
+  - Convention: Use the camera’s human-readable name (e.g., `"Mesa Grande N"`).
 
-* **`metadata`** *(dictionary, optional)*: Any additional dataset information for tracking and reference.
+* **`metadata`** (dictionary, optional): Any additional dataset information for tracking and reference.
 
   Example:
 
@@ -38,25 +35,17 @@ For each camera dataset, define the following variables:
   }
   ```
 
-* **`label_map`** *(dictionary)*: The mapping of label IDs to display names and colors in the visualization legend.
-
-  **Required format:**
-
+* **`label_map`** (dictionary): The mapping of label IDs to display names and colors in the visualization legend.
+  - Required format:
   ```python
   label_map = {
       0: {"name": "Normal", "color": "purple"},
       1: {"name": "Aormal", "color": "gold"},
   }
   ```
-  **Requirements:**
-  * Keys must match values present in `labels`
-  * Every label must include both `name` and `color`
 
-* **`output_path`** *(string)*: The file path where embedding data will be saved.
-  **Default:**
-  ```
-  embedding_data/embeddings.json
-  ```
+* **`output_path`** (string): The file path where embedding data will be saved.
+  - Default: `embedding_data/embeddings.json`
 
 ---
 
@@ -110,16 +99,9 @@ datasets[
 
 Once the dataset is exported:
 
-1. Open the Embedding Visualization website
-2. Navigate to the **Camera** dropdown
+1. Open the embedding viewer website
+2. Navigate to the **Dataset** dropdown
 3. Select the `dataset_id`
-
-The dashboard will automatically load:
-
-* PCA projections
-* Label color mapping
-* Legend entries
-* Hover image previews
 
 ---
 
@@ -143,7 +125,7 @@ This will:
 
 ### Notes
 
-* Ensure embeddings are reduced to **exactly 5 PCs**
+* Ensure embeddings are reduced to 5 PCs
 * Confirm all arrays have matching lengths
 * Verify image URLs are accessible
 * Ensure label IDs match the label map
