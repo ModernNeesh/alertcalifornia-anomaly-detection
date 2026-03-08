@@ -245,4 +245,5 @@ images_for_report/
 import_data_ptz/
 scene_data/
 metar_data/
-outputs/inference_results.txt
+outputs/inference_results.csv
+outputs/throughput_results.csv
