@@ -98,5 +98,6 @@ To explore the embedding space, open `index.html` in a live server environment. 
 
 If you prefer, you may also view the visualization [online](https://dsc180.dronelab-nathan-2.ucsd.edu/). 
 
+All projection visualizations in our report were generated using this tool and can be replicated by selecting the same parameters.
 
  
