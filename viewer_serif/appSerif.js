@@ -1,6 +1,6 @@
 let DATA;
 
-fetch("../embedding_data/embeddings1.json")
+fetch("../embedding_data/embeddings.json")
   .then(r => r.json())
   .then(json => {
 
@@ -256,10 +256,7 @@ function updatePlot() {
         p.id,
         p.label_name
       ]),
-      hovertemplate:
-        "X: %{x}<br>" +
-        "Y: %{y}<br>" +
-        "<extra></extra>",
+      hoverinfo: "none"
       });
   
   });
