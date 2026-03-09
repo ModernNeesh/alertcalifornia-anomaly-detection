@@ -1,6 +1,6 @@
 let DATA;
 
-fetch("../embedding_data/embeddings.json")
+fetch("/embedding_data/embeddings.json")
   .then(r => r.json())
   .then(json => {
 
@@ -31,8 +31,6 @@ fetch("../embedding_data/embeddings.json")
 
 document.querySelectorAll("select").forEach(el => el.addEventListener("change", updatePlot));
 
-  // collect all unique values across datasets
-  let values = new Set();
 
 function updateColorOptions(selectedDatasets) {
 
@@ -127,7 +125,8 @@ function updatePlot() {
     p.label_name = labelMap[p.label]?.name ?? p.label;
   });
 
-  modeVal = mode.value;
+  const modeVal = mode.value;
+  const colorBy = document.getElementById("colorBy")
   const xi = +document.getElementById("x").value;
   const yi = +document.getElementById("y").value;
   const zi = +document.getElementById("z").value;
@@ -137,7 +136,6 @@ function updatePlot() {
   // define color scale for labels
   const colorMode = colorBy.value;
   if (colorMode === "label") {
-    const labelMap = selectedDatasets[0].label_map;
   
     allPoints.forEach(p => {
       const labelInfo = labelMap[p.label];
@@ -290,7 +288,7 @@ function updatePlot() {
       yaxis: { title: {text: yLabel, font: { size: 24 } }, tickfont: { size: 14 } },
       zaxis: { title: {text: zLabel, font: { size: 24 } }, tickfont: { size: 14 } },
       aspectmode: "cube"
-    },
+    }
     document.getElementById("z-select").style.display = "block";
 
   } else {
@@ -339,7 +337,6 @@ function updatePlot() {
         const labelColor = pt.customdata[2];
         const id = pt.customdata[3];
         classLabel = pt.customdata[4];
-
     
         previewImg.src = imgUrl;
     
@@ -347,9 +344,16 @@ function updatePlot() {
     
         const labelDiv = document.getElementById("preview-label");
         if (labelDiv) {
-          labelDiv.textContent = `${colorLabel} (ID: ${id})`;
-          labelDiv.style.color = labelColor;
-          labelDiv.style.fontWeight = "bold";
+          const colorByVal = document.getElementById("colorBy").value;
+          const colorLine = colorByVal !== "label"
+            ? `<span class="preview-color-group">${colorLabel}</span>`
+            : "";
+
+          labelDiv.innerHTML = `
+            <span class="preview-class">${classLabel}</span>
+            ${colorLine}
+            <span class="preview-id">ID: ${id}</span>
+          `;
         }
     
         preview.style.display = "block";
