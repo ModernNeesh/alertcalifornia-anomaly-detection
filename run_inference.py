@@ -51,6 +51,9 @@ if __name__ == "__main__":
     
     parser.add_argument("--clear-previous-results", default = True, type= bool,
                         help = "Whether to clear previous results before running inference")
+    
+    parser.add_argument("--use-sanitized-data", default = True, type= bool,
+                        help = "Whether to use sanitized camera data")
 
 
     parser.set_defaults()
@@ -67,6 +70,9 @@ if __name__ == "__main__":
 
 model_dir = args.model_path + args.model_name
 head_name = model_dir[:-4] + "_head.pth"
+
+if args.use_sanitized_data:
+    args.data_csv_name = "sanitized_camera_data.csv"
 data_name = args.camera_data_dir + args.data_csv_name
 
 num_classes = 2 
@@ -89,7 +95,10 @@ full_model.to(device)
 
 start_time = time.perf_counter()
 
-data = dataloading.get_data(data_name, args.image_dir, replace_images = args.test_throughput, binarize = True)
+if args.use_sanitized_data:
+    data = dataloading.get_data(data_name, args.image_dir, replace_images = args.test_throughput, binarize = False)
+else:
+    data = dataloading.get_data(data_name, args.image_dir, replace_images = args.test_throughput, binarize = True)
 
 
 inference_dataloader = dataloading.get_inference_dataloader(data, batch_size=args.batch_size, generator=g)

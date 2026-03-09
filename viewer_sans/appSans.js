@@ -1,20 +1,22 @@
 let DATA;
 
-fetch("/embedding_data/embeddings.json")
+fetch("../embedding_data/embeddings1.json")
   .then(r => r.json())
   .then(json => {
 
     DATA = json;
 
-    const camSel = document.getElementById("camera");
+    // dataset selection
+    const datasetSel = document.getElementById("dataset");
 
     json.datasets.forEach(d => {
       const opt = document.createElement("option");
       opt.value = d.dataset_id;
       opt.text = d.dataset_id;
-      camSel.appendChild(opt);
+      datasetSel.appendChild(opt);
     });
-
+    
+    // pc selection
     for (let i = 0; i < 5; i++) {
       ["x", "y", "z"].forEach(id => {
         const opt = document.createElement("option");
@@ -27,10 +29,10 @@ fetch("/embedding_data/embeddings.json")
     updatePlot();
   });
 
-document
-  .querySelectorAll("select")
-  .forEach(el => el.addEventListener("change", updatePlot));
+document.querySelectorAll("select").forEach(el => el.addEventListener("change", updatePlot));
 
+  // collect all unique values across datasets
+  let values = new Set();
 
 function updateColorOptions(selectedDatasets) {
 
@@ -80,7 +82,7 @@ function updateColorOptions(selectedDatasets) {
   if (!multipleDatasets && existingDataset) {
 
     if (colorBySelect.value === "dataset") {
-      colorBySelect.value = "label";
+      colorBySelect.value = "label"; // choose your safe default
     }
 
     existingDataset.remove();
@@ -125,8 +127,7 @@ function updatePlot() {
     p.label_name = labelMap[p.label]?.name ?? p.label;
   });
 
-  const modeVal = mode.value;
-  const colorBy = document.getElementById("colorBy")
+  modeVal = mode.value;
   const xi = +document.getElementById("x").value;
   const yi = +document.getElementById("y").value;
   const zi = +document.getElementById("z").value;
@@ -136,6 +137,7 @@ function updatePlot() {
   // define color scale for labels
   const colorMode = colorBy.value;
   if (colorMode === "label") {
+    const labelMap = selectedDatasets[0].label_map;
   
     allPoints.forEach(p => {
       const labelInfo = labelMap[p.label];
@@ -254,8 +256,12 @@ function updatePlot() {
         p.id,
         p.label_name
       ]),
-      hoverinfo: "none"
+      hovertemplate:
+        "X: %{x}<br>" +
+        "Y: %{y}<br>" +
+        "<extra></extra>",
       });
+  
   });
 
   // define layout 
@@ -268,7 +274,7 @@ function updatePlot() {
       family: "Roboto, sans-serif",
     },
     title: {
-      font: { size: 30 },
+      font: { size: 46 },
       text: selectedSets.join(", ") 
       // + 
       //   (modeVal === "3d" 
@@ -278,26 +284,26 @@ function updatePlot() {
     showlegend: true,
     legend: {
       itemsizing: "constant",
-      font: { size: 30 }
+      font: { size: 46 }
     }
   };
 
   if (modeVal === "3d") {
     layout.scene = {
-      xaxis: { title: { text: xLabel, font: { size: 24 } }, tickfont: { size: 14 } },
-      yaxis: { title: {text: yLabel, font: { size: 24 } }, tickfont: { size: 14 } },
-      zaxis: { title: {text: zLabel, font: { size: 24 } }, tickfont: { size: 14 } },
+      xaxis: { title: { text: xLabel, font: { size: 40 } }, tickfont: { size: 14 } },
+      yaxis: { title: {text: yLabel, font: { size:40 } }, tickfont: { size: 14 } },
+      zaxis: { title: {text: zLabel, font: { size: 40 } }, tickfont: { size: 14 } },
       aspectmode: "cube"
-    }
+    },
     document.getElementById("z-select").style.display = "block";
 
   } else {
-    layout.xaxis = { title: {text: xLabel, font: { size: 24 } },
+    layout.xaxis = { title: {text: xLabel, font: { size: 40 } },
     scaleanchor: "y",
     scaleratio: 1,
     tickfont: { size: 22 },     
   };
-    layout.yaxis = { title: {text: yLabel, font: { size: 24 } },
+    layout.yaxis = { title: {text: yLabel, font: { size: 40 } },
     tickfont: { size: 22 } };
     document.getElementById("z-select").style.display = "none";
   }
@@ -329,8 +335,51 @@ function updatePlot() {
     if (modeVal === "2d") {
 
       plotDiv.on("plotly_hover", data => {
-
+    
         const pt = data.points[0];
+    
+        const imgUrl = pt.customdata[0];
+        const colorLabel = pt.customdata[1];
+        const labelColor = pt.customdata[2];
+        const id = pt.customdata[3];
+        classLabel = pt.customdata[4];
+
+    
+        previewImg.src = imgUrl;
+    
+        previewImg.style.border = `3px solid ${labelColor}`;
+    
+        const labelDiv = document.getElementById("preview-label");
+        if (labelDiv) {
+          labelDiv.textContent = `${colorLabel} (ID: ${id})`;
+          labelDiv.style.color = labelColor;
+          labelDiv.style.fontWeight = "bold";
+        }
+    
+        preview.style.display = "block";
+        preview.style.left = mouseX + 10 + "px";
+        preview.style.top  = mouseY + 10 + "px";
+        preview.style.opacity = 1;
+      });
+    
+      plotDiv.on("plotly_unhover", () => {
+        preview.style.display = "none";
+        preview.style.opacity = 0;
+      });
+    }
+    
+    if (modeVal === "3d") {
+
+      plotDiv.on("plotly_hover", data => {
+    
+        const pt = data.points[0];
+    
+        if (pt.pointNumber === lastPointId) return;
+        lastPointId = pt.pointNumber;
+    
+        clearTimeout(hoverTimeout);
+    
+        hoverTimeout = setTimeout(() => {
     
         const imgUrl = pt.customdata[0];
         const colorLabel = pt.customdata[1];
@@ -356,57 +405,27 @@ function updatePlot() {
           `;
         }
     
-        preview.style.display = "block";
-
-        preview.style.left = mouseX + 20 + "px";
-        preview.style.top  = mouseY + 20 + "px";
-
-        preview.style.opacity = 1;
-      });
-
-      plotDiv.on("plotly_unhover", () => {
-        preview.style.display = "none";
-        preview.style.opacity = 0;
-      });
-    }
-
-
-    if (modeVal === "3d") {
-
-      plotDiv.on("plotly_hover", data => {
-
-        const pt = data.points[0];
-
-        if (pt.pointNumber === lastPointId) return;
-        lastPointId = pt.pointNumber;
-
-        clearTimeout(hoverTimeout);
-
-        hoverTimeout = setTimeout(() => {
-
-          previewImg.src = pt.customdata;
           preview.style.display = "block";
-
-          preview.style.left = mouseX + 20 + "px";
-          preview.style.top  = mouseY + 20 + "px";
-
+          preview.style.left = mouseX + 10 + "px";
+          preview.style.top  = mouseY + 10 + "px";
+    
           preview.style.transition = "opacity 0.2s";
           preview.style.opacity = 1;
-
-        }, 800); 
+    
+        }, 800);
       });
-
+    
       plotDiv.on("plotly_unhover", () => {
-
+    
         lastPointId = null;
         clearTimeout(hoverTimeout);
-
+    
         preview.style.opacity = 0;
-
+    
         setTimeout(() => {
           preview.style.display = "none";
         }, 200);
       });
-    }
+    }    
   });
 }

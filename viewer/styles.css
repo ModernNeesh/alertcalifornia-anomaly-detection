@@ -1,31 +1,28 @@
 #controls-bar {
   display: flex;
-  flex-direction: column;
-  gap: 18px;
   flex-wrap: wrap;       
   align-items: center;
   justify-content: center;
+  gap: 15px;               
   padding: 12px 20px;
-  background-color: #f6f6f6;
+  background-color: #f7f8fa;
   border-radius: 10px;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.12);
   margin-bottom: 20px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  font-family: "Roboto", sans-serif;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 #controls-bar h2 {
   flex-basis: 100%;    
-  margin: 0 0 10px 0px;
-  font-size: 1.8em;
-  color: #1e1d1f;
+  margin: 0 0 10px 0;
+  font-size: 1.5em;
+  color: #2c3e50;
   text-align: center;
 }
 
 #controls-bar label {
   font-weight: 600;
-  font-size: 1.2em;
-  color: #1e1d1f;
-  opacity: 0.85;
+  color: #34495e;
 }
 
 #controls-bar select {
@@ -33,22 +30,20 @@
   border: 1px solid #ccc;
   border-radius: 6px;
   background-color: #fff;
+  font-size: 0.95em;
   transition: all 0.2s ease;
   cursor: pointer;
-  margin-right: 20px;
-  font-family: "Roboto", sans-serif;
-  font-size: 1em;
 }
 
 #controls-bar select:hover {
-  border-color: #00c6d7;
-  box-shadow: 0 2px 4px #e5f7f9;
+  border-color: #2980b9;
+  box-shadow: 0 2px 6px rgba(41, 128, 185, 0.2);
 }
 
 #controls-bar select:focus {
   outline: none;
-  border-color: #00c6d7;
-  box-shadow: 0 0 0 2px #e5f7f9;
+  border-color: #2980b9;
+  box-shadow: 0 0 0 2px rgba(41, 128, 185, 0.25);
 }
 
 #controls-bar > div {
@@ -58,56 +53,18 @@
 }
 
 #img-preview {
-  position: absolute;
-  pointer-events: none;
-  display: none;
-  z-index: 10;
-  filter: drop-shadow(0 4px 16px rgba(0,0,0,0.35));
-}
-
-#preview-label {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  background: white;
-  font-size: 1em;
-  padding: 6px 10px;
-  margin-bottom: 0;
-  border-radius: 6px 6px 6px 6px;
-  white-space: nowrap;
-}
-
-.preview-class {
-  font-weight: 700;
-  font-size: 1em;
-  color: #111;
-}
-
-.preview-color-group {
-  font-weight: 500;
-  color: #555;
-}
-
-.preview-id {
-  font-size: 0.8em;
-  color: #999;
-  font-weight: 400;
-}
-
-#preview-img {
-  max-width: 350px;
-  display: block;
-  border-radius: 12px 12px 12px 12px;
-}
+    position: absolute;
+    pointer-events: none;
+    display: none;
+    z-index: 9999;
+  }
 
 
-#color-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  padding-top: 12px;
-}
+  
+
+
+
+
   
   
   
