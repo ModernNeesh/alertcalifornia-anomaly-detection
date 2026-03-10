@@ -51,13 +51,23 @@ pip3 install -r requirements.txt
 ```
 
 ### 2. Ensure necessary files are included
-  In order to train a model and/or perform inference, labeled data from LabelStudio is necessary and must be in the form of a CSV file. This data is not publicly available. The following instructions pertain to those who have access to the file containing the data.
+  In order to train a model and/or perform inference, labeled data from LabelStudio is necessary and must be in the form of a CSV file. This data is not publicly available. However, sanitized data for public use is provided, and it can be used to analyze our model's inference outputs. 
+
+  The following data is provided through a ZIP file at this link: (pending)
+  * `sanitized_camera_data.csv`: Data used to test the generalizability of our model. It is sourced from three camera locations unseen during training, and is sanitized for public use. It is recommended to place this file in the `camera_data` directory.
+  * `final_model.pth` and `final_model_head.pth`: The weights of our final model. `final_model.pth` contains the weights for the encoder part of the model, while `final_model_head.pth` contains the weights for the classification head. It is recommended to place these files in the `weights` directory.
+  * `model_weights_camera_10-27-25.pth` contains weights used to pretrain the model. We use transfer learning to leverage results from previous experiments. More details can be found in our report linked above. It is recommended to place these files in the `weights` directory.
+
+  
+  The following instructions pertain to those who have full access to the data.
   There are three files necessary to reproduce our results. The first is `coronado_hills_data.csv`, obtained from exporting our labeled results from Label Studio. This data is used in `model_test_runs_triplet.ipynb` to train a model using triplet loss. The second is `coronado_hills_data.json`, which is obtained by exporting *all* results from Label Studio. This data is used in `model_test_runs_deepsad.ipynb` and `model_test_runs_hierarchical.ipynb` to train baseline models using the DeepSAD objective and H-SAD objective, respectively.
-  Additionally, the combined training set data and unseen set data must also be included. The training set data contains the concatenated labeled results from the Coronado Hills S, Mesa Grande N, and Palomar Observatory 1 Label Studio projects. This file, by default, must be named `training_set_cameras_data.csv`. Meanwhile, the test set data concatenates the labeled results from the Berryessa, Toro Peak 1, and Dewdrop 1 Label Studio projects. This file, by default, must be named `unseen_set_cameras_data.csv`. During concatenation, a column named `location` is added by extracting the location name from the image URL. 
+  Additionally, the combined training set data and unseen set data must also be included. The training set data contains the concatenated labeled results from the Coronado Hills S, Mesa Grande N, and Palomar Observatory 1 Label Studio projects. This file, by default, must be named `training_set_cameras_data.csv`. Meanwhile, the test set data concatenates the labeled results from the Berryessa, Toro Peak 1, and Dewdrop 1 Label Studio projects. This file, by default, must be named `unseen_set_cameras_data.csv`. During concatenation, a column named `location` is added by extracting the location name from the image URL. All of these CSV files must be placed in the `camera_data` directory.
 
 ### 3. Run program(s)
 
 #### Model training notebooks
+
+Model training functionality is only available for those who have full access to the LabelStudio data. If you do not, skip this section and go to the "Running Inference" section.
 
 For the simplest experience, it is recommended to run all the cells in `model_test_runs_finalized.ipynb` as they appear. This will generate a model that can be used to perform inference. After doing so, you can proceed to the next section. The rest of the current section outlines optional scripts that may be run to reproduce our paper's results. 
 
