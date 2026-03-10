@@ -3,7 +3,7 @@
 
 ## Structure of Repository
 
-This repository contains the code used to obtain the results in our paper, *Quality of Service Anomaly Detection in Wildfire Monitoring Networks*, which can be found here (link pending). The folders are structured as follows:
+This repository contains the code used to obtain the results in our paper, *Quality of Service Anomaly Detection in Wildfire Monitoring Networks*, which can be found here (link pending). The folders are structured as follows: 
 
 * `camera_data`: contains the following:
   * The `dataframes` folder contains the training, validation, and test data used during training
