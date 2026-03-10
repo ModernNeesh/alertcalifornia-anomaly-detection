@@ -53,7 +53,7 @@ pip3 install -r requirements.txt
 ### 2. Ensure necessary files are included
   In order to train a model and/or perform inference, labeled data from LabelStudio is necessary and must be in the form of a CSV file. This data is not publicly available. However, sanitized data for public use is provided, and it can be used to analyze our model's inference outputs. 
 
-  The following data is provided through a ZIP file at this link: (pending)
+  The following data is provided through a ZIP file at this link: [https://drive.google.com/file/d/1-iaocYwyb_Z_k7p4rPlvtctzJxr2LS40/view?usp=sharing](url)
   * `sanitized_camera_data.csv`: Data used to test the generalizability of our model. It is sourced from three camera locations unseen during training, and is sanitized for public use. It is recommended to place this file in the `camera_data` directory.
   * `final_model.pth` and `final_model_head.pth`: The weights of our final model. `final_model.pth` contains the weights for the encoder part of the model, while `final_model_head.pth` contains the weights for the classification head. It is recommended to place these files in the `weights` directory.
   * `model_weights_camera_10-27-25.pth` contains weights used to pretrain the model. We use transfer learning to leverage results from previous experiments. More details can be found in our report linked above. It is recommended to place these files in the `weights` directory.
