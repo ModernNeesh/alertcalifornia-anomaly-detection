@@ -248,3 +248,4 @@ metar_data/
 outputs/inference_results.csv
 outputs/throughput_results.csv
 outputs/visualizations/*
+testing.ipynb
