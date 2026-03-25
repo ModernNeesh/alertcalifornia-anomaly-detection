@@ -225,6 +225,8 @@ def get_train_val_test(data = None, df_dir = None, output_csvs = False, csv_outp
     
     return train, val, test
 
+#TODO: Add a function called get_k_folds that splits the data into k folds for cross validation, and outputs dataframes for each fold. Should also stratify data based on label and location
+
 
 #Defining a dataset class to import the images. We resize them to 224 by 224 since that's what the model expects, but make no other transformations.
 
