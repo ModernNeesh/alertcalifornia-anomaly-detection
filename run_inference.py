@@ -53,7 +53,7 @@ if __name__ == "__main__":
                         help = "Whether to clear previous results before running inference")
     
     parser.add_argument("--use-sanitized-data", default = True, type= bool,
-                        help = "Whether to use sanitized camera data")
+                        help = "Whether to use sanitized camera data. LEAVE THIS AS TRUE UNLESS YOU HAVE THE UNSANITIZED CAMERA DATA")
 
 
     parser.set_defaults()

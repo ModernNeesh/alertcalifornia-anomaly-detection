@@ -71,7 +71,7 @@ def get_data_urls(labels_csv, binarize = False, include_location = False):
 
 
 
-    data["choice"] = data["choice"].fillna("0").str.extract(r"(\d)").astype(int) - 1
+    data["choice"] = data["choice"].astype(str).fillna("0").str.extract(r"(\d)").astype(int) - 1
 
     if binarize:
         data["choice"] = data["choice"].apply(lambda x: -1 if x < 0 else 1 if x > 1 else 0)

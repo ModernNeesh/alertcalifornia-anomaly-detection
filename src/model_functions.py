@@ -3,7 +3,6 @@ import torch
 from sklearn.decomposition import PCA
 from sklearn.metrics import precision_recall_fscore_support
 
-torch.manual_seed(1234)
 
 
 #Train the model on the given data
