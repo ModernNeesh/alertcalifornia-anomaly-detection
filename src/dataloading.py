@@ -2,6 +2,7 @@ import pandas as pd
 import requests
 import os
 from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedKFold
 import time
 import torch
 import chromadb
@@ -13,8 +14,9 @@ from torch.utils.data import DataLoader
 import gc
 from requests.adapters import HTTPAdapter, Retry
 import numpy as np
-from src.seeds import set_seed, seed_worker
+from src.seeds import seed_worker
 
+seed_value = 147
 
 #Helper function to get annotation result from differently formatted data
 def get_annotation_result(x):
@@ -139,7 +141,7 @@ def get_images_df(image_dir):
 
 
 #Gather the data for image labels and paths into one big DataFrame
-def get_data(labels_csv, image_dir, replace_images = False, binarize = False):
+def get_data(labels_csv, image_dir, replace_images = False, binarize = False, include_location = False):
     """
     labels_csv: The annotation file exported from LabelStudio, in csv form
 
@@ -147,7 +149,7 @@ def get_data(labels_csv, image_dir, replace_images = False, binarize = False):
 
     replace_images: Whether to replace the images currently in the directory
     """
-    url_data = get_data_urls(labels_csv, binarize = binarize)
+    url_data = get_data_urls(labels_csv, binarize = binarize, include_location = include_location)
 
     download_images(url_data, image_dir, replace_images)
 
@@ -155,7 +157,10 @@ def get_data(labels_csv, image_dir, replace_images = False, binarize = False):
 
     full_data = url_data.merge(image_df, left_on = "id", right_on="id")
 
-    full_data = full_data.get(["choice", "img_path", "id", "image"])
+    if include_location:
+        full_data = full_data.get(["choice", "img_path", "id", "image", "location"])
+    else:
+        full_data = full_data.get(["choice", "img_path", "id", "image"])
     full_data['timestamp'] = full_data['image'].str.extract(r"https:\/\/tools\.alertcalifornia\.org\/fireframes5\/digitalpath-redis\/[^\/]+\/\d{4}\/\d{3}\/\d{2}\/(\d+)\.")
 
     return full_data
@@ -184,38 +189,38 @@ def get_train_val_test(data = None, df_dir = None, output_csvs = False, csv_outp
             data[['img_path', 'image', 'id', 'timestamp']], 
             data['choice'], 
             test_size=0.2, 
-            random_state=147
+            random_state=seed_value
         )
         X_train, X_val, y_train, y_val = train_test_split(
             X_train_val, 
             y_train_val, 
             test_size=0.25, 
-            random_state=147
+            random_state=seed_value
         )
 
 
         train = pd.DataFrame({
-            "img_directory": X_train['img_path'].values,
-            "img_url": X_train['image'].values,
+            "img_path": X_train['img_path'].values,
+            "image": X_train['image'].values,
             "id": X_train['id'].values,
             "timestamp" : X_train['timestamp'].values,
-            "label": y_train.values
+            "choice": y_train.values
         }).reset_index(drop=True)
         
         val = pd.DataFrame({
-            "img_directory": X_val['img_path'].values,
-            "img_url": X_val['image'].values,
+            "img_path": X_val['img_path'].values,
+            "image": X_val['image'].values,
             "id": X_val['id'].values,
             "timestamp" : X_val['timestamp'].values,
-            "label": y_val.values
+            "choice": y_val.values
         }).reset_index(drop=True)
         
         test = pd.DataFrame({
-            "img_directory": X_test['img_path'].values,
-            "img_url": X_test['image'].values,
+            "img_path": X_test['img_path'].values,
+            "image": X_test['image'].values,
             "id": X_test['id'].values,
-            "timestamp" : X_val['timestamp'].values,
-            "label": y_test.values
+            "timestamp" : X_test['timestamp'].values,
+            "choice": y_test.values
         }).reset_index(drop=True)
 
         if(output_csvs):
@@ -226,7 +231,37 @@ def get_train_val_test(data = None, df_dir = None, output_csvs = False, csv_outp
     return train, val, test
 
 #TODO: Add a function called get_k_folds that splits the data into k folds for cross validation, and outputs dataframes for each fold. Should also stratify data based on label and location
-
+def get_k_folds(df: pd.DataFrame, strat_cols: list, k: int) -> list:
+    """
+    Randomly splits a DataFrame into k approximately equal sub-dataframes, 
+    stratified by a list of features.
+    
+    Args:
+        df: The pandas DataFrame to split.
+        strat_cols: A list of column names to stratify by.
+        k: The number of folds to generate.
+        
+    Returns:
+        A list containing k pandas DataFrames.
+    """
+    # 1. Create a single composite key for stratification
+    # This joins the string values of the strat_cols to treat them as a single target class
+    strat_key = df[strat_cols].astype(str).agg('_'.join, axis=1)
+    
+    # 2. Initialize the StratifiedKFold object
+    # shuffle=True ensures the data is randomized before splitting
+    skf = StratifiedKFold(n_splits=k, shuffle=True, random_state=seed_value)
+    
+    folds = []
+    
+    # 3. Generate the folds
+    # skf.split generates (train_index, test_index) for each fold.
+    # The 'test_index' represents the unique chunk of data for that specific fold.
+    for _, test_idx in skf.split(df, strat_key):
+        fold_df = df.iloc[test_idx].copy()
+        folds.append(fold_df)
+        
+    return folds
 
 #Defining a dataset class to import the images. We resize them to 224 by 224 since that's what the model expects, but make no other transformations.
 
@@ -244,9 +279,9 @@ class CustomImageDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        image_path = self.data.iloc[idx]["img_directory"]
-        label = int(self.data.iloc[idx]["label"])
-        img_url = self.data.iloc[idx]["img_url"]
+        image_path = self.data.iloc[idx]["img_path"]
+        label = int(self.data.iloc[idx]["choice"])
+        img_url = self.data.iloc[idx]["image"]
         id = str(self.data.iloc[idx]["id"])
     
         image = Image.open(image_path).convert('RGB')
@@ -296,7 +331,7 @@ class CustomEmbeddingDataset(Dataset):
 
     def __getitem__(self, idx):
         embedding = self.data.filter(items = range(0, 768)).iloc[idx].to_numpy()
-        label = self.data['label'].iloc[idx]
+        label = self.data['choice'].iloc[idx]
 
         
         return {
@@ -324,6 +359,13 @@ def get_train_val_test_dataloaders(train_df, val_df, test_df, batch_size = 32, g
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, pin_memory=True, generator = generator, worker_init_fn=seed_worker)
 
     return train_dataloader, val_dataloader, test_dataloader
+
+def pipe_to_dataloader(df, batch_size = 32, generator = None):
+    dataset = CustomImageDataset(df, transform=transform)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True, generator = generator, worker_init_fn=seed_worker)
+
+    return dataloader
+
 
 def embedding_to_dataloader(embeddings, labels, batch_size = 32, generator = None):
     dataset = CustomEmbeddingDataset(embeddings, labels)
@@ -379,7 +421,7 @@ def load_full_embeddings(original_df, collection_name, persist_directory = "embe
 
     db_output = collection.get(ids = original_df['id'].astype(str).tolist(), include = ['embeddings'])
     embeddings = db_output['embeddings']
-    labels = original_df['label']
+    labels = original_df['choice']
 
     db_df = pd.DataFrame(embeddings)
     db_df['ids'] = db_output['ids']
@@ -388,8 +430,8 @@ def load_full_embeddings(original_df, collection_name, persist_directory = "embe
     db_df = db_df.merge(original_df, left_on = 'ids', right_on='id')
 
     embeddings = db_df.filter(items = range(0, 768))
-    labels = db_df['label']
-    img_urls = db_df['img_url']
+    labels = db_df['choice']
+    img_urls = db_df['image']
     a_ids = db_df['id']
 
     return embeddings, labels, img_urls, a_ids

@@ -1,0 +1,18 @@
+Objective: triplet
+Average training accuracy: 0.9948654174804688
+Standard deviation of training accuracy across folds: 0.0008619873529574964
+Average validation accuracy: 0.9437798857688904
+Standard deviation of validation accuracy across folds: 0.004598300890815109
+
+Objective: deepsad
+Average training accuracy: 0.9539880305528641
+Standard deviation of training accuracy across folds: 0.00491349119869488
+Average validation accuracy: 0.9318181723356247
+Standard deviation of validation accuracy across folds: 0.006392027263166409
+
+Objective: hsad
+Average training accuracy: 0.7938185483217239
+Standard deviation of training accuracy across folds: 0.011998121348755775
+Average validation accuracy: 0.7621610760688782
+Standard deviation of validation accuracy across folds: 0.012626076200229475
+

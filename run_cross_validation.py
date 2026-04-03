@@ -1,18 +1,14 @@
 #Importing packages
 import argparse
-from torch.utils.data import DataLoader
 import torch
 import torch.optim as optim
 import torch.nn as nn
-from tqdm import tqdm
 import pandas as pd
 from chromadb import PersistentClient as PersistentClient
-from chromadb.errors import InternalError as CollectionError
-import os
+import numpy as np
 
 #library functions
 import src.dataloading as dataloading
-import src.data_vis as data_vis
 import src.model_functions as model_functions
 import src.loss_functions as loss_functions
 import src.models as models
@@ -61,124 +57,186 @@ data_name = args.camera_data_dir + args.data_csv_name
 model_path = 'weights/'
 model_name = "crossval_model.pth"
 
+
+def get_labeled_data(df):
+    """
+    Helper function to get only the labeled data from the full dataset, which is used for training the classification head
+
+    args:
+        df (pd.DataFrame): the full dataset
+
+    """
+    return df[df['choice'] > -1]
+
+
+
+def get_accs_of_fold(train, val, train_dataloader, val_dataloader, full_train_dataloader = None):
+    #Load encoder
+    encoder = models.create_encoder()
+    encoder.to(device)
+    encoder.load_state_dict(torch.load('weights/model_weights_camera_10-27-25.pth', map_location=device, weights_only=True));
+
+
+    #Set up loss function and optimizer based on objective
+    if args.objective == "triplet":
+        loss_func = loss_functions.TripletMarginLoss(margin = 0.19)
+        optimizer = optim.Adam(encoder.parameters(), lr=1e-5) 
+        num_epochs = 10
+    elif args.objective == "deepsad":
+        loss_func = loss_functions.DeepSADLoss(model=encoder, train_data=train_dataloader, device = device, eta = 10)
+        optimizer = optim.Adam(encoder.parameters(), lr=1e-6, weight_decay=1e-7) 
+        num_epochs = 1
+    elif args.objective == "hsad":
+        loss_func = loss_functions.HierarchicalSADLoss(model=encoder, train_data=train_dataloader, num_classes = 4, device = device, eta = 0.01, alpha = 10)
+        optimizer = optim.Adam(encoder.parameters(), lr=1e-5, weight_decay=1e-6) 
+        num_epochs = 5
+    elif args.objective == "final":
+        loss_func = loss_functions.TripletMarginLoss(margin = 0.19)
+        optimizer = optim.Adam(encoder.parameters(), lr=1e-5) 
+        num_epochs = 10
+
+
+    if args.objective in ["deepsad", "hsad"]:
+        model_functions.train_model(encoder, train_data=full_train_dataloader, 
+                                        num_epochs=num_epochs, loss_func=loss_func, 
+                                        optimizer=optimizer, name = model_name, path = model_path, device=device, save=False, return_losses=False)
+    else:
+        model_functions.train_model(encoder, train_data=train_dataloader, 
+                                    num_epochs=num_epochs, loss_func=loss_func, 
+                                    optimizer=optimizer, name = model_name, 
+                                    path = model_path, device=device, save=False, return_losses=False)
+
+    client = PersistentClient(path="embedding_data/") 
+
+    try:
+        client.delete_collection(name="train_embeddings")
+    except Exception:
+        pass
+
+    try:
+        client.delete_collection(name="val_embeddings")
+    except Exception:
+        pass
+
+
+    dataloading.save_full_embeddings(encoder, train_dataloader, 
+                            "train_embeddings", persist_directory = "embedding_data/", 
+                            device = device)
+
+
+    dataloading.save_full_embeddings(encoder, val_dataloader, 
+                            "val_embeddings", persist_directory = "embedding_data/", 
+                            device = device)
+        
+        
+    #Embeddings of training data, used to train the classification head
+    train_embeddings, train_labels, train_img_urls, train_a_ids = dataloading.load_full_embeddings(train, "train_embeddings", persist_directory = "embedding_data/")
+    train_embedding_dataloader = dataloading.embedding_to_dataloader(train_embeddings, train_labels, batch_size=32, generator = g)
+
+    #Embeddings of validation data
+    val_embeddings, val_labels, _, _ = dataloading.load_full_embeddings(val, "val_embeddings", persist_directory = "embedding_data/")
+
+
+
+    #Train the classification head on the embeddings of the training data, and evaluate on the validation data
+    classification_head = models.ClassificationHead()
+    classification_head.to(device)
+
+    head_criterion = nn.CrossEntropyLoss()
+    head_optimizer = optim.Adam(classification_head.parameters(), lr=1e-3) # Optimize only the new head
+
+    if args.objective in ["deepsad", "final"]:
+        num_epochs_head = 10
+    else:
+        num_epochs_head = 15
+
+    model_functions.train_classification_head(classification_head, train_embedding_dataloader, num_epochs=num_epochs_head, criterion=head_criterion, optimizer=head_optimizer, 
+                            device=device, model_name=model_name, model_path = model_path, save=False)
+
+    #Report training and validation accuracy
+    classification_head.eval() 
+
+
+    #Function to calculate accuracy of classification head on given embeddings and labels
+    def get_accuracy(outputs, labels):
+        return (torch.argmax(outputs, dim = -1) == labels).float().mean().item()
+
+
+    train_embeddings_tensor = torch.Tensor(train_embeddings.to_numpy()).to(device)
+    val_embeddings_tensor = torch.Tensor(val_embeddings.to_numpy()).to(device)
+
+    train_labels_tensor = torch.Tensor(train_labels.to_numpy()).to(device)
+    val_labels_tensor = torch.Tensor(val_labels.to_numpy()).to(device)
+
+
+    train_outputs = classification_head(train_embeddings_tensor)
+    val_outputs = classification_head(val_embeddings_tensor)
+
+    train_acc = get_accuracy(train_outputs, train_labels_tensor)
+    val_acc = get_accuracy(val_outputs, val_labels_tensor)
+    print(f"Training accuracy: {train_acc}")
+    print(f"Validation accuracy: {val_acc}")
+    return train_acc, val_acc
+
+
+
 #Load data and create dataloaders
 #TODO: Once cross validation splits are implemented, this will need to be updated to perform cross validation
+stratification_cols = ['choice', 'location']
+num_folds = 5
+
+#If the objective is hierarchical SAD, data must be binarized
 if args.objective == "hsad":
-    data = dataloading.get_data(data_name, args.image_dir, replace_images = False)
-
-    labeled_data = data[data['choice'] > -1]
-
-    full_train, _, _ = dataloading.get_train_val_test(data = data, output_csvs=False)
-
-    train, val, test = dataloading.get_train_val_test(data = labeled_data, output_csvs=True)
-
-    full_train_dataloader, _, _ = dataloading.get_train_val_test_dataloaders(full_train, val, test, generator = g)
-    train_dataloader, val_dataloader, test_dataloader = dataloading.get_train_val_test_dataloaders(train, val, test, generator = g)
+    data = dataloading.get_data(data_name, args.image_dir, replace_images = False, include_location = True)
 else:
-    data = dataloading.get_data(data_name, args.image_dir, replace_images = False, binarize=True)
-    train, val, test = dataloading.get_train_val_test(data = data, output_csvs=True)
-    train_dataloader, val_dataloader, test_dataloader = dataloading.get_train_val_test_dataloaders(train, val, test, generator = g)
+    data = dataloading.get_data(data_name, args.image_dir, replace_images = False, binarize=True, include_location=True)
 
-#Load encoder
-encoder = models.create_encoder()
-encoder.to(device)
-encoder.load_state_dict(torch.load('weights/model_weights_camera_10-27-25.pth', map_location=device, weights_only=True));
-
-
-#Set up loss function and optimizer based on objective
-if args.objective == "triplet":
-    loss_func = loss_functions.TripletMarginLoss(margin = 0.19)
-    optimizer = optim.Adam(encoder.parameters(), lr=1e-5) 
-    num_epochs = 10
-elif args.objective == "deepsad":
-    loss_func = loss_functions.DeepSADLoss(model=encoder, train_data=train_dataloader, device = device, eta = 10)
-    optimizer = optim.Adam(encoder.parameters(), lr=1e-6, weight_decay=1e-7) 
-    num_epochs = 1
-elif args.objective == "hsad":
-    loss_func = loss_functions.HierarchicalSADLoss(model=encoder, train_data=train_dataloader, num_classes = 4, device = device, eta = 0.01, alpha = 10)
-    optimizer = optim.Adam(encoder.parameters(), lr=1e-5, weight_decay=1e-6) 
-    num_epochs = 5
-elif args.objective == "final":
-    loss_func = loss_functions.TripletMarginLoss(margin = 0.19)
-    optimizer = optim.Adam(encoder.parameters(), lr=1e-5) 
-    num_epochs = 10
-
-
+#For semi-supervised objectives, separately get full data folds and separate out labeled data. For supervised objectives, all data is labeled so only get labeled data folds
 if args.objective in ["deepsad", "hsad"]:
-    model_functions.train_model(encoder, train_data=full_train_dataloader, 
-                                    num_epochs=num_epochs, loss_func=loss_func, 
-                                    optimizer=optimizer, name = model_name, path = model_path, device=device, save=False, return_losses=False)
-else:
-    model_functions.train_model(encoder, train_data=train_dataloader, 
-                                num_epochs=num_epochs, loss_func=loss_func, 
-                                optimizer=optimizer, name = model_name, 
-                                path = model_path, device=device, save=False, return_losses=False)
-
-client = PersistentClient(path="embedding_data/") 
-
-try:
-    client.delete_collection(name="train_embeddings")
-except Exception:
-    pass
-
-try:
-    client.delete_collection(name="val_embeddings")
-except Exception:
-    pass
-
-
-dataloading.save_full_embeddings(encoder, train_dataloader, 
-                        "train_embeddings", persist_directory = "embedding_data/", 
-                        device = device)
-
-
-dataloading.save_full_embeddings(encoder, val_dataloader, 
-                        "val_embeddings", persist_directory = "embedding_data/", 
-                        device = device)
     
-    
-#Embeddings of training data, used to train the classification head
-train_embeddings, train_labels, train_img_urls, train_a_ids = dataloading.load_full_embeddings(train, "train_embeddings", persist_directory = "embedding_data/")
-train_embedding_dataloader = dataloading.embedding_to_dataloader(train_embeddings, train_labels, batch_size=32, generator = g)
+    #Additionally stratify by whether the data is labeled or not, to ensure stratification remains after removing unlabeled data
+    data['islabeled'] = data['choice'].apply(lambda x: 0 if x == -1 else 1)
+    stratification_cols = ['choice', 'islabeled', 'location']
 
-#Embeddings of validation data
-val_embeddings, val_labels, _, _ = dataloading.load_full_embeddings(val, "val_embeddings", persist_directory = "embedding_data/")
-
-
-
-#Train the classification head on the embeddings of the training data, and evaluate on the validation data
-classification_head = models.ClassificationHead()
-classification_head.to(device)
-
-head_criterion = nn.CrossEntropyLoss()
-head_optimizer = optim.Adam(classification_head.parameters(), lr=1e-3) # Optimize only the new head
-
-if args.objective in ["deepsad", "final"]:
-    num_epochs_head = 10
+    full_folds = dataloading.get_k_folds(data, k=num_folds, strat_cols=stratification_cols)
+    labeled_folds = [get_labeled_data(fold) for fold in full_folds]
 else:
-    num_epochs_head = 15
+    #The other objectives are supervised, so all data is labeled
+    full_folds = None
+    labeled_folds = dataloading.get_k_folds(data, k=num_folds, strat_cols=stratification_cols)
 
-model_functions.train_classification_head(classification_head, train_embedding_dataloader, num_epochs=num_epochs_head, criterion=head_criterion, optimizer=head_optimizer, 
-                           device=device, model_name=model_name, model_path = model_path, save=False)
+train_accs = np.array([])
+val_accs = np.array([])
 
-#Report training and validation accuracy
-classification_head.eval() 
+for i in range(num_folds-1): #We hold out the final fold as a test set
+    val_fold_idx = i
 
+    labeled_train_folds = [fold for j, fold in enumerate(labeled_folds) if j != val_fold_idx]
+    labeled_val_fold = labeled_folds[val_fold_idx]
 
-#Function to calculate accuracy of classification head on given embeddings and labels
-def get_accuracy(outputs, labels):
-    return (torch.argmax(outputs, dim = -1) == labels).float().mean().item()
+    if full_folds is not None:
+        full_train_folds = [fold for j, fold in enumerate(full_folds) if j != val_fold_idx]
 
+    labeled_train_data = pd.concat(labeled_train_folds, ignore_index=True)
+    val_data = labeled_val_fold
+    full_train_data = pd.concat(full_train_folds, ignore_index=True) if full_folds is not None else None
 
-train_embeddings_tensor = torch.Tensor(train_embeddings.to_numpy()).to(device)
-val_embeddings_tensor = torch.Tensor(val_embeddings.to_numpy()).to(device)
+    train_dataloader = dataloading.pipe_to_dataloader(labeled_train_data, batch_size=32, generator = g)
+    val_dataloader = dataloading.pipe_to_dataloader(labeled_val_fold, batch_size=32, generator = g)
 
-train_labels_tensor = torch.Tensor(train_labels.to_numpy()).to(device)
-val_labels_tensor = torch.Tensor(val_labels.to_numpy()).to(device)
+    if full_folds is not None:
+        full_train_dataloader = dataloading.pipe_to_dataloader(full_train_data, batch_size=32, generator = g)
+        train_acc, val_acc = get_accs_of_fold(labeled_train_data, val_data, train_dataloader, val_dataloader, full_train_dataloader)
+    else:
+        train_acc, val_acc = get_accs_of_fold(labeled_train_data, val_data, train_dataloader, val_dataloader)
 
+    train_accs = np.append(train_accs, train_acc)
+    val_accs = np.append(val_accs, val_acc)
 
-train_outputs = classification_head(train_embeddings_tensor)
-val_outputs = classification_head(val_embeddings_tensor)
-
-print(f"Training accuracy: {get_accuracy(train_outputs, train_labels_tensor)}")
-print(f"Validation accuracy: {get_accuracy(val_outputs, val_labels_tensor)}")
+with open("outputs/cross_validation_results.txt", "a") as f:
+    f.write(f"Objective: {args.objective}\n")
+    f.write(f"Average training accuracy: {train_accs.mean()}\n")
+    f.write(f"Standard deviation of training accuracy across folds: {train_accs.std()}\n")
+    f.write(f"Average validation accuracy: {val_accs.mean()}\n")
+    f.write(f"Standard deviation of validation accuracy across folds: {val_accs.std()}\n")
+    f.write("\n")
