@@ -33,7 +33,7 @@ if __name__ == "__main__":
     parser.add_argument("--camera-data-dir", default="camera_data/",
                         help="The location the camera data is stored in")
     
-    parser.add_argument("--data-csv-name", default="training_set_cameras_data.csv",
+    parser.add_argument("--data-csv-name", default="coronado_hills_data.csv",
                         help="The location to store the camera data")
 
 
@@ -211,16 +211,20 @@ val_accs = np.array([])
 for i in range(num_folds-1): #We hold out the final fold as a test set
     val_fold_idx = i
 
+    #Get folds for this iteration of cross validation. All folds except the validation fold are used for training
     labeled_train_folds = [fold for j, fold in enumerate(labeled_folds) if j != val_fold_idx]
     labeled_val_fold = labeled_folds[val_fold_idx]
 
+    #For semi-supervised objectives, get the full training folds as well, which include the unlabeled data. For supervised objectives, full_folds is None so this step is skipped.
     if full_folds is not None:
         full_train_folds = [fold for j, fold in enumerate(full_folds) if j != val_fold_idx]
 
+    #Concatenate folds together into a single dataframe
     labeled_train_data = pd.concat(labeled_train_folds, ignore_index=True)
     val_data = labeled_val_fold
     full_train_data = pd.concat(full_train_folds, ignore_index=True) if full_folds is not None else None
 
+    #Create dataloaders for this fold, and get training and validation accuracies. 
     train_dataloader = dataloading.pipe_to_dataloader(labeled_train_data, batch_size=32, generator = g)
     val_dataloader = dataloading.pipe_to_dataloader(labeled_val_fold, batch_size=32, generator = g)
 
@@ -230,10 +234,11 @@ for i in range(num_folds-1): #We hold out the final fold as a test set
     else:
         train_acc, val_acc = get_accs_of_fold(labeled_train_data, val_data, train_dataloader, val_dataloader)
 
+    #Update list of training and validation accuracies across folds
     train_accs = np.append(train_accs, train_acc)
     val_accs = np.append(val_accs, val_acc)
 
-with open("outputs/cross_validation_results.txt", "a") as f:
+with open(r"outputs/cross_validation_results.txt", "a") as f:
     f.write(f"Objective: {args.objective}\n")
     f.write(f"Average training accuracy: {train_accs.mean()}\n")
     f.write(f"Standard deviation of training accuracy across folds: {train_accs.std()}\n")
