@@ -6,6 +6,8 @@ import torch.nn as nn
 import pandas as pd
 from chromadb import PersistentClient as PersistentClient
 import numpy as np
+from sklearn.metrics import precision_recall_fscore_support
+import time
 
 #library functions
 import src.dataloading as dataloading
@@ -14,7 +16,9 @@ import src.loss_functions as loss_functions
 import src.models as models
 from src.seeds import set_seed
 
-g = set_seed()
+start = time.perf_counter()
+seed = 9876
+g = set_seed(seed)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Script for running inference on the trained model.")
@@ -160,6 +164,13 @@ def get_accs_of_fold(train, val, train_dataloader, val_dataloader, full_train_da
     #Function to calculate accuracy of classification head on given embeddings and labels
     def get_accuracy(outputs, labels):
         return (torch.argmax(outputs, dim = -1) == labels).float().mean().item()
+    
+    def get_recall_precision(outputs, labels):
+        predictions = torch.argmax(outputs, dim = -1).detach().cpu().numpy().copy()
+        recall, precision, _, _ =  precision_recall_fscore_support(predictions, labels, average='weighted')
+        return recall, precision
+
+
 
 
     train_embeddings_tensor = torch.Tensor(train_embeddings.to_numpy()).to(device)
@@ -174,39 +185,49 @@ def get_accs_of_fold(train, val, train_dataloader, val_dataloader, full_train_da
 
     train_acc = get_accuracy(train_outputs, train_labels_tensor)
     val_acc = get_accuracy(val_outputs, val_labels_tensor)
-    print(f"Training accuracy: {train_acc}")
-    print(f"Validation accuracy: {val_acc}")
-    return train_acc, val_acc
+    recall, precision = get_recall_precision(val_outputs, val_labels)
+    return train_acc, val_acc, recall, precision
 
 
 
 #Load data and create dataloaders
-#TODO: Once cross validation splits are implemented, this will need to be updated to perform cross validation
-stratification_cols = ['choice', 'location']
+stratification_cols = ['choice']
 num_folds = 5
 
 #If the objective is hierarchical SAD, data must be binarized
 if args.objective == "hsad":
-    data = dataloading.get_data(data_name, args.image_dir, replace_images = False, include_location = True)
+    binarize = False
+    include_location = False
+elif args.objective == "final":
+    binarize = True
+    include_location = True
 else:
-    data = dataloading.get_data(data_name, args.image_dir, replace_images = False, binarize=True, include_location=True)
+    binarize = True
+    include_location = False
+
+data = dataloading.get_data(data_name, args.image_dir, replace_images = False, binarize=binarize, include_location=include_location)
 
 #For semi-supervised objectives, separately get full data folds and separate out labeled data. For supervised objectives, all data is labeled so only get labeled data folds
 if args.objective in ["deepsad", "hsad"]:
     
     #Additionally stratify by whether the data is labeled or not, to ensure stratification remains after removing unlabeled data
     data['islabeled'] = data['choice'].apply(lambda x: 0 if x == -1 else 1)
-    stratification_cols = ['choice', 'islabeled', 'location']
+    stratification_cols = ['choice', 'islabeled']
 
     full_folds = dataloading.get_k_folds(data, k=num_folds, strat_cols=stratification_cols)
     labeled_folds = [get_labeled_data(fold) for fold in full_folds]
 else:
+    #Stratify by labels for final model
+    if args.objective == "final":
+        stratification_cols = ['choice', 'location']
     #The other objectives are supervised, so all data is labeled
     full_folds = None
     labeled_folds = dataloading.get_k_folds(data, k=num_folds, strat_cols=stratification_cols)
 
 train_accs = np.array([])
 val_accs = np.array([])
+recalls = np.array([])
+precisions = np.array([])
 
 for i in range(num_folds-1): #We hold out the final fold as a test set
     val_fold_idx = i
@@ -230,18 +251,29 @@ for i in range(num_folds-1): #We hold out the final fold as a test set
 
     if full_folds is not None:
         full_train_dataloader = dataloading.pipe_to_dataloader(full_train_data, batch_size=32, generator = g)
-        train_acc, val_acc = get_accs_of_fold(labeled_train_data, val_data, train_dataloader, val_dataloader, full_train_dataloader)
+        train_acc, val_acc, recall, precision = get_accs_of_fold(labeled_train_data, val_data, train_dataloader, val_dataloader, full_train_dataloader)
     else:
-        train_acc, val_acc = get_accs_of_fold(labeled_train_data, val_data, train_dataloader, val_dataloader)
+        train_acc, val_acc, recall, precision = get_accs_of_fold(labeled_train_data, val_data, train_dataloader, val_dataloader)
 
     #Update list of training and validation accuracies across folds
     train_accs = np.append(train_accs, train_acc)
     val_accs = np.append(val_accs, val_acc)
+    recalls = np.append(recalls, recall)
+    precisions = np.append(precisions, precision)
 
 with open(r"outputs/cross_validation_results.txt", "a") as f:
-    f.write(f"Objective: {args.objective}\n")
-    f.write(f"Average training accuracy: {train_accs.mean()}\n")
-    f.write(f"Standard deviation of training accuracy across folds: {train_accs.std()}\n")
-    f.write(f"Average validation accuracy: {val_accs.mean()}\n")
-    f.write(f"Standard deviation of validation accuracy across folds: {val_accs.std()}\n")
+    f.write(f"{args.objective}, {train_accs.mean()}, {train_accs.std()}, {val_accs.mean()}, {val_accs.std()}, {recalls.mean()}, {recalls.std()}, {precisions.mean()}, {precisions.std()}, {seed}")
     f.write("\n")
+
+end = time.perf_counter()
+total_seconds = start - end
+
+# Manually convert seconds to hours and minutes
+if total_seconds >= 3600:
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    print(f"Runtime: {int(hours)}h {int(minutes)}m {seconds:.2f}s")
+else:
+    minutes, seconds = divmod(total_seconds, 60)
+    print(f"Runtime: {int(minutes)}m {seconds:.2f}s")
+
