@@ -17,8 +17,6 @@ import src.models as models
 from src.seeds import set_seed
 
 start = time.perf_counter()
-seed = 9876
-g = set_seed(seed)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Script for running inference on the trained model.")
@@ -37,8 +35,11 @@ if __name__ == "__main__":
     parser.add_argument("--camera-data-dir", default="camera_data/",
                         help="The location the camera data is stored in")
     
-    parser.add_argument("--data-csv-name", default="coronado_hills_data.csv",
+    parser.add_argument("--data-csv-name", default="training_set_cameras_data.csv",
                         help="The location to store the camera data")
+    
+    parser.add_argument("--seed", default = 1234, type=int,
+                        help="The seed for reproducibility")
 
 
     parser.set_defaults()
@@ -52,6 +53,8 @@ if __name__ == "__main__":
 
     print("Using device:", device)
 
+seed = args.seed
+g = set_seed(seed)
 
 
 #Set directory to data and device for training
@@ -71,7 +74,6 @@ def get_labeled_data(df):
 
     """
     return df[df['choice'] > -1]
-
 
 
 def get_accs_of_fold(train, val, train_dataloader, val_dataloader, full_train_dataloader = None):
@@ -192,7 +194,7 @@ def get_accs_of_fold(train, val, train_dataloader, val_dataloader, full_train_da
 
 #Load data and create dataloaders
 stratification_cols = ['choice']
-num_folds = 5
+num_folds = 6
 
 #If the objective is hierarchical SAD, data must be binarized
 if args.objective == "hsad":
@@ -232,13 +234,13 @@ precisions = np.array([])
 for i in range(num_folds-1): #We hold out the final fold as a test set
     val_fold_idx = i
 
-    #Get folds for this iteration of cross validation. All folds except the validation fold are used for training
-    labeled_train_folds = [fold for j, fold in enumerate(labeled_folds) if j != val_fold_idx]
+    #Get folds for this iteration of cross validation. All folds except the validation and test fold are used for training
+    labeled_train_folds = [fold for j, fold in enumerate(labeled_folds[:-1]) if j != val_fold_idx]
     labeled_val_fold = labeled_folds[val_fold_idx]
 
     #For semi-supervised objectives, get the full training folds as well, which include the unlabeled data. For supervised objectives, full_folds is None so this step is skipped.
     if full_folds is not None:
-        full_train_folds = [fold for j, fold in enumerate(full_folds) if j != val_fold_idx]
+        full_train_folds = [fold for j, fold in enumerate(full_folds[:-1]) if j != val_fold_idx]
 
     #Concatenate folds together into a single dataframe
     labeled_train_data = pd.concat(labeled_train_folds, ignore_index=True)
@@ -261,12 +263,40 @@ for i in range(num_folds-1): #We hold out the final fold as a test set
     recalls = np.append(recalls, recall)
     precisions = np.append(precisions, precision)
 
+#Get metrics for test fold
+test_fold_idx = num_folds - 1
+labeled_train_folds = [fold for j, fold in enumerate(labeled_folds) if j != test_fold_idx]
+labeled_test_fold = labeled_folds[test_fold_idx]
+
+#For semi-supervised objectives, get the full training folds as well, which include the unlabeled data. For supervised objectives, full_folds is None so this step is skipped.
+if full_folds is not None:
+    full_train_folds = [fold for j, fold in enumerate(full_folds) if j != test_fold_idx]
+
+#Concatenate folds together into a single dataframe
+labeled_train_data = pd.concat(labeled_train_folds, ignore_index=True)
+test_data = labeled_test_fold
+full_train_data = pd.concat(full_train_folds, ignore_index=True) if full_folds is not None else None
+
+#Create dataloaders for this fold, and get training and validation accuracies. 
+train_dataloader = dataloading.pipe_to_dataloader(labeled_train_data, batch_size=32, generator = g)
+test_dataloader = dataloading.pipe_to_dataloader(labeled_test_fold, batch_size=32, generator = g)
+
+if full_folds is not None:
+    full_train_dataloader = dataloading.pipe_to_dataloader(full_train_data, batch_size=32, generator = g)
+    final_train_acc, test_acc, final_recall, final_precision = get_accs_of_fold(labeled_train_data, test_data, train_dataloader, test_dataloader, full_train_dataloader)
+else:
+    final_train_acc, test_acc, final_recall, final_precision = get_accs_of_fold(labeled_train_data, test_data, train_dataloader, test_dataloader)
+
+
 with open(r"outputs/cross_validation_results.txt", "a") as f:
-    f.write(f"{args.objective}, {train_accs.mean()}, {train_accs.std()}, {val_accs.mean()}, {val_accs.std()}, {recalls.mean()}, {recalls.std()}, {precisions.mean()}, {precisions.std()}, {seed}")
+    f.write(f"{args.objective}, {train_accs.mean()}, {train_accs.std()}," +
+            f"{val_accs.mean()}, {val_accs.std()}, {recalls.mean()}, " +
+            f"{recalls.std()}, {precisions.mean()}, {precisions.std()}," +
+            f"{final_train_acc}, {test_acc}, {final_recall}, {final_precision}, {seed}")
     f.write("\n")
 
 end = time.perf_counter()
-total_seconds = start - end
+total_seconds = end - start
 
 # Manually convert seconds to hours and minutes
 if total_seconds >= 3600:
