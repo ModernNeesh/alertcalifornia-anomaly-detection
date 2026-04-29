@@ -17,3 +17,14 @@ python run_cross_validation.py --objective "triplet" --seed 4586
 python run_cross_validation.py --objective "deepsad" --data-csv-name "coronado_hills_full.json" --seed 4586
 python run_cross_validation.py --objective "hsad" --data-csv-name "coronado_hills_full.json" --seed 4586
 python run_cross_validation.py --objective "final" --data-csv-name "training_set_cameras_data.csv" --seed 4586
+
+python run_cross_validation.py --objective "triplet"  
+python run_cross_validation.py --objective "deepsad" --data-csv-name "coronado_hills_full.json" 
+python run_cross_validation.py --objective "hsad" --data-csv-name "coronado_hills_full.json" 
+python run_cross_validation.py --objective "final" --data-csv-name "training_set_cameras_data.csv"
+
+python run_cross_validation.py --objective "triplet" --seed 8576
+python run_cross_validation.py --objective "deepsad" --data-csv-name "coronado_hills_full.json" --seed 8576
+python run_cross_validation.py --objective "hsad" --data-csv-name "coronado_hills_full.json" --seed 8576
+python run_cross_validation.py --objective "final" --data-csv-name "training_set_cameras_data.csv" --seed 8576
+
