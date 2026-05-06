@@ -8,6 +8,7 @@ from chromadb import PersistentClient as PersistentClient
 import numpy as np
 from sklearn.metrics import precision_recall_fscore_support
 import time
+import random
 
 #library functions
 import src.dataloading as dataloading
@@ -37,9 +38,6 @@ if __name__ == "__main__":
     
     parser.add_argument("--data-csv-name", default="training_set_cameras_data.csv",
                         help="The location to store the camera data")
-    
-    parser.add_argument("--seed", default = 1234, type=int,
-                        help="The seed for reproducibility")
 
 
     parser.set_defaults()
@@ -53,7 +51,10 @@ if __name__ == "__main__":
 
     print("Using device:", device)
 
-seed = args.seed
+# Define the maximum value for a 64-bit signed integer
+INT64_MAX = 2**63 - 1  # 9,223,372,036,854,775,807
+
+seed = random.randint(0, INT64_MAX)
 g = set_seed(seed)
 
 
@@ -80,7 +81,6 @@ def get_accs_of_fold(train, val, train_dataloader, val_dataloader, full_train_da
     #Load encoder
     encoder = models.create_encoder()
     encoder.to(device)
-    encoder.load_state_dict(torch.load('weights/model_weights_camera_10-27-25.pth', map_location=device, weights_only=True));
 
 
     #Set up loss function and optimizer based on objective
