@@ -36,7 +36,7 @@ if __name__ == "__main__":
     parser.add_argument("--camera-data-dir", default="camera_data/",
                         help="The location the camera data is stored in")
     
-    parser.add_argument("--data-csv-name", default="training_set_cameras_data.csv",
+    parser.add_argument("--data-csv-name", default="coronado_hills_data.csv",
                         help="The location to store the camera data")
 
 
@@ -51,10 +51,10 @@ if __name__ == "__main__":
 
     print("Using device:", device)
 
-# Define the maximum value for a 64-bit signed integer
-INT64_MAX = 2**63 - 1  # 9,223,372,036,854,775,807
+# Define the maximum value for a 32-bit signed integer
+INT32_MAX = 2**32 - 1  
 
-seed = random.randint(0, INT64_MAX)
+seed = random.randint(0, INT32_MAX)
 g = set_seed(seed)
 
 
@@ -200,14 +200,21 @@ num_folds = 6
 if args.objective == "hsad":
     binarize = False
     include_location = False
+    inject_data = pd.read_csv("camera_data/coronado_labels_to_inject.csv")
 elif args.objective == "final":
     binarize = True
     include_location = True
+    inject_data = None
+elif args.objective == "deepsad":
+    binarize = True
+    include_location = False
+    inject_data = pd.read_csv("camera_data/coronado_labels_to_inject.csv")
 else:
     binarize = True
     include_location = False
+    inject_data = None
 
-data = dataloading.get_data(data_name, args.image_dir, replace_images = False, binarize=binarize, include_location=include_location)
+data = dataloading.get_data(data_name, args.image_dir, replace_images = False, binarize=binarize, include_location=include_location, inject_data = inject_data)
 
 #For semi-supervised objectives, separately get full data folds and separate out labeled data. For supervised objectives, all data is labeled so only get labeled data folds
 if args.objective in ["deepsad", "hsad"]:

@@ -49,7 +49,7 @@ def get_annotation_result(x):
 
 
 #Get the label, image URL, and annotation id of the images
-def get_data_urls(labels_csv, binarize = False, include_location = False):
+def get_data_urls(labels_csv, binarize = False, include_location = False, inject_data = None):
     """
     labels_csv: The annotation file exported from LabelStudio, in csv form
     
@@ -57,8 +57,25 @@ def get_data_urls(labels_csv, binarize = False, include_location = False):
     if 'json' in labels_csv:
         raw_data = pd.read_json(labels_csv)
 
-        annotations = raw_data['annotations'].apply(get_annotation_result)
         images = raw_data['data'].apply(lambda x: x['image'])
+        
+
+        annotations = raw_data['annotations'].apply(get_annotation_result)
+
+
+        if inject_data is not None:
+            image_level_id = pd.DataFrame(images.apply(lambda url: url.split('/')[-1]), columns = ['id'])
+            assert 'id' in inject_data.columns and 'choice' in inject_data.columns
+
+            new_annotations = image_level_id.merge(inject_data, left_on = 'id', right_on = 'id', how = 'left')['choice'].combine_first(annotations)
+
+            assert new_annotations.index.equals(annotations.index), "The indices of the new annotations and old annotations should be the same"
+
+            assert new_annotations.isna().sum() != 0, "No NaN values should be in annotations"
+
+            annotations = new_annotations
+
+        
         ids = raw_data['id']
 
         data = pd.DataFrame({'choice' : annotations, 'image' : images, 'id' : ids})
@@ -141,7 +158,7 @@ def get_images_df(image_dir):
 
 
 #Gather the data for image labels and paths into one big DataFrame
-def get_data(labels_csv, image_dir, replace_images = False, binarize = False, include_location = False):
+def get_data(labels_csv, image_dir, replace_images = False, binarize = False, include_location = False, inject_data = None):
     """
     labels_csv: The annotation file exported from LabelStudio, in csv form
 
@@ -149,7 +166,7 @@ def get_data(labels_csv, image_dir, replace_images = False, binarize = False, in
 
     replace_images: Whether to replace the images currently in the directory
     """
-    url_data = get_data_urls(labels_csv, binarize = binarize, include_location = include_location)
+    url_data = get_data_urls(labels_csv, binarize = binarize, include_location = include_location, inject_data = inject_data)
 
     download_images(url_data, image_dir, replace_images)
 
