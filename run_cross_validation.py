@@ -36,7 +36,7 @@ if __name__ == "__main__":
     parser.add_argument("--camera-data-dir", default="camera_data/",
                         help="The location the camera data is stored in")
     
-    parser.add_argument("--data-csv-name", default="coronado_hills_data.csv",
+    parser.add_argument("--data-csv-name", default="coronado_hills_4pt.csv",
                         help="The location to store the camera data")
 
 

@@ -52,7 +52,7 @@ if __name__ == "__main__":
     parser.add_argument("--clear-previous-results", default = True, type= bool,
                         help = "Whether to clear previous results before running inference")
     
-    parser.add_argument("--use-sanitized-data", default = True, type= bool,
+    parser.add_argument("--use-sanitized-data", default = False, type= bool,
                         help = "Whether to use sanitized camera data. LEAVE THIS AS TRUE UNLESS YOU HAVE THE UNSANITIZED CAMERA DATA")
 
 
@@ -66,6 +66,7 @@ if __name__ == "__main__":
         device = args.device
 
     print("Using device:", device)
+    print(args.test_throughput, args.use_sanitized_data)
 
 
 model_dir = args.model_path + args.model_name
@@ -87,6 +88,7 @@ classification_head.load_state_dict(torch.load(head_name, map_location=device, w
 
 full_model = models.FullModel(encoder, classification_head)
 full_model.to(device)
+full_model.eval()
 
 
 
@@ -96,9 +98,9 @@ full_model.to(device)
 start_time = time.perf_counter()
 
 if args.use_sanitized_data:
-    data = dataloading.get_data(data_name, args.image_dir, replace_images = args.test_throughput, binarize = False)
+    data = dataloading.get_data(data_name, args.image_dir, replace_images = False, binarize = False)
 else:
-    data = dataloading.get_data(data_name, args.image_dir, replace_images = args.test_throughput, binarize = True)
+    data = dataloading.get_data(data_name, args.image_dir, replace_images = False, binarize = True)
 
 
 inference_dataloader = dataloading.get_inference_dataloader(data, batch_size=args.batch_size, generator=g)
@@ -119,26 +121,38 @@ if os.path.exists(save_path):
     if args.clear_previous_results:
         os.remove(save_path)
 
-#Write results to file in the form of: id, img_url, img_path, predicted_label, predicted_label_name
-with open("outputs/inference_results.csv", "a") as f:
-    for batch in tqdm(inference_dataloader, desc = "Running inference on batches"):
-        start_time = time.perf_counter()
-        images = batch['pixel_values'].to(device)
-        outputs = full_model(images)
-        end_time = time.perf_counter()
+#Write results to file in the form of:
+# id, img_url, img_path, predicted_label, predicted_label_name, normal_score, abnormal_score
+with open(save_path, "a") as f:
+    with torch.no_grad():
+        for batch in tqdm(inference_dataloader, desc = "Running inference on batches"):
+            start_time = time.perf_counter()
+            images = batch['pixel_values'].to(device)
+            outputs = full_model(images)
+            probabilities = F.softmax(outputs, dim=-1)
+            end_time = time.perf_counter()
 
-        inference_time += (end_time - start_time)
+            inference_time += (end_time - start_time)
 
-        ids = np.array(batch['id'])
-        img_urls = np.array(batch['img_url'])
-        img_paths = np.array(batch['img_path'])
-        outputs_list = torch.argmax(outputs, dim = -1).cpu().detach().numpy()
-        outputs_name = np.where(outputs_list == 0, "Normal", "Abnormal")
+            ids = np.array(batch['id'])
+            img_urls = np.array(batch['img_url'])
+            img_paths = np.array(batch['img_path'])
+            outputs_list = torch.argmax(outputs, dim = -1).cpu().numpy()
+            outputs_name = np.where(outputs_list == 0, "Normal", "Abnormal")
+            scores = probabilities.cpu().numpy()
 
-        stacked = np.hstack([ids.reshape(-1, 1), img_urls.reshape(-1, 1), img_paths.reshape(-1, 1), outputs_list.reshape(-1, 1), outputs_name.reshape(-1, 1)])
+            stacked = np.hstack([
+                ids.reshape(-1, 1),
+                img_urls.reshape(-1, 1),
+                img_paths.reshape(-1, 1),
+                outputs_list.reshape(-1, 1),
+                outputs_name.reshape(-1, 1),
+                scores[:, 0].reshape(-1, 1),
+                scores[:, 1].reshape(-1, 1),
+            ])
 
-        np.savetxt(f, stacked, delimiter=',', fmt = "%s")
-        f.write("\n")
+            np.savetxt(f, stacked, delimiter=',', fmt = "%s")
+            f.write("\n")
 
 print(f"Total inference time: {inference_time:.4f} seconds. Average time per batch: {inference_time/num_batches:.4f} seconds.")
 

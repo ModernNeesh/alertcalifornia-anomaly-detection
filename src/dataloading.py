@@ -202,12 +202,20 @@ def get_train_val_test(data = None, df_dir = None, output_csvs = False, csv_outp
         if type(data) == type(None):
             raise ValueError("Must include dataframe to split")
         # X: features, y: target variable
-        X_train_val, X_test, y_train_val, y_test = train_test_split(
-            data[['img_path', 'image', 'id', 'timestamp']], 
-            data['choice'], 
-            test_size=0.2, 
-            random_state=seed_value
-        )
+        if 'location' in data.columns:
+            X_train_val, X_test, y_train_val, y_test = train_test_split(
+                data[['img_path', 'image', 'id', 'timestamp', 'location']], 
+                data['choice'], 
+                test_size=0.2, 
+                random_state=seed_value
+            )
+        else:
+            X_train_val, X_test, y_train_val, y_test = train_test_split(
+                data[['img_path', 'image', 'id', 'timestamp']], 
+                data['choice'], 
+                test_size=0.2, 
+                random_state=seed_value
+            )
         X_train, X_val, y_train, y_val = train_test_split(
             X_train_val, 
             y_train_val, 
@@ -221,6 +229,7 @@ def get_train_val_test(data = None, df_dir = None, output_csvs = False, csv_outp
             "image": X_train['image'].values,
             "id": X_train['id'].values,
             "timestamp" : X_train['timestamp'].values,
+            "location" : np.repeat(None, len(X_train)) if "location" not in X_train.columns else X_train['location'].values,
             "choice": y_train.values
         }).reset_index(drop=True)
         
@@ -229,6 +238,7 @@ def get_train_val_test(data = None, df_dir = None, output_csvs = False, csv_outp
             "image": X_val['image'].values,
             "id": X_val['id'].values,
             "timestamp" : X_val['timestamp'].values,
+            "location" : np.repeat(None, len(X_val)) if "location" not in X_val.columns else X_val['location'].values,
             "choice": y_val.values
         }).reset_index(drop=True)
         
@@ -237,6 +247,7 @@ def get_train_val_test(data = None, df_dir = None, output_csvs = False, csv_outp
             "image": X_test['image'].values,
             "id": X_test['id'].values,
             "timestamp" : X_test['timestamp'].values,
+            "location" : np.repeat(None, len(X_test)) if "location" not in X_test.columns else X_test['location'].values,
             "choice": y_test.values
         }).reset_index(drop=True)
 
@@ -300,6 +311,10 @@ class CustomImageDataset(Dataset):
         label = int(self.data.iloc[idx]["choice"])
         img_url = self.data.iloc[idx]["image"]
         id = str(self.data.iloc[idx]["id"])
+        if 'location' in self.data.columns:
+            location = str(self.data.iloc[idx]['location'])
+        else:
+            location = None
     
         image = Image.open(image_path).convert('RGB')
         
@@ -311,7 +326,8 @@ class CustomImageDataset(Dataset):
             "labels": label, 
             "img_path": image_path,
             "img_url": img_url,
-            "id" : id
+            "id" : id,
+            "location" : location
         }
     
 class InferenceDataset(Dataset):
@@ -451,4 +467,9 @@ def load_full_embeddings(original_df, collection_name, persist_directory = "embe
     img_urls = db_df['image']
     a_ids = db_df['id']
 
-    return embeddings, labels, img_urls, a_ids
+    if 'location' in db_df.columns:
+        location = db_df['location']
+    else:
+        location = None    
+
+    return embeddings, labels, img_urls, a_ids, location
